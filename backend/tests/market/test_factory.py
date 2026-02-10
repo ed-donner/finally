@@ -3,8 +3,6 @@
 import os
 from unittest.mock import patch
 
-import pytest
-
 from app.market.cache import PriceCache
 from app.market.factory import create_market_data_source
 from app.market.massive_client import MassiveDataSource

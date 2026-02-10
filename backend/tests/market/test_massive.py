@@ -1,6 +1,5 @@
 """Tests for MassiveDataSource (mocked)."""
 
-import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -32,6 +31,7 @@ class TestMassiveDataSource:
             poll_interval=60.0,  # Long interval so the loop doesn't auto-poll
         )
         source._tickers = ["AAPL", "GOOGL"]
+        source._client = MagicMock()  # Satisfy the _poll_once guard
 
         mock_snapshots = [
             _make_snapshot("AAPL", 190.50, 1707580800000),
@@ -53,6 +53,7 @@ class TestMassiveDataSource:
             poll_interval=60.0,
         )
         source._tickers = ["AAPL", "BAD"]
+        source._client = MagicMock()  # Satisfy the _poll_once guard
 
         good_snap = _make_snapshot("AAPL", 190.50, 1707580800000)
         bad_snap = MagicMock()
@@ -75,6 +76,7 @@ class TestMassiveDataSource:
             poll_interval=60.0,
         )
         source._tickers = ["AAPL"]
+        source._client = MagicMock()  # Satisfy the _poll_once guard
 
         with patch.object(source, "_fetch_snapshots", side_effect=Exception("network error")):
             await source._poll_once()  # Should not raise
@@ -90,6 +92,7 @@ class TestMassiveDataSource:
             poll_interval=60.0,
         )
         source._tickers = ["AAPL"]
+        source._client = MagicMock()  # Satisfy the _poll_once guard
 
         mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000)]
 

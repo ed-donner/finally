@@ -1,9 +1,5 @@
 """Tests for GBMSimulator."""
 
-import math
-
-import pytest
-
 from app.market.seed_prices import SEED_PRICES
 from app.market.simulator import GBMSimulator
 

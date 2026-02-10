@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+
+from massive import RESTClient
+from massive.rest.models import SnapshotMarketType
 
 from .cache import PriceCache
 from .interface import MarketDataSource
@@ -34,13 +36,9 @@ class MassiveDataSource(MarketDataSource):
         self._interval = poll_interval
         self._tickers: list[str] = []
         self._task: asyncio.Task | None = None
-        self._client: Any = None  # Lazy import to avoid hard dependency
+        self._client: RESTClient | None = None
 
     async def start(self, tickers: list[str]) -> None:
-        # Lazy import: only import massive when actually using real market data.
-        # This means the massive package is not required when using the simulator.
-        from massive import RESTClient
-
         self._client = RESTClient(api_key=self._api_key)
         self._tickers = list(tickers)
 
@@ -124,8 +122,6 @@ class MassiveDataSource(MarketDataSource):
 
     def _fetch_snapshots(self) -> list:
         """Synchronous call to the Massive REST API. Runs in a thread."""
-        from massive.rest.models import SnapshotMarketType
-
         return self._client.get_snapshot_all(
             market_type=SnapshotMarketType.STOCKS,
             tickers=self._tickers,

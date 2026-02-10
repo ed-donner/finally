@@ -43,6 +43,5 @@ CORRELATION_GROUPS: dict[str, set[str]] = {
 # Correlation coefficients
 INTRA_TECH_CORR = 0.6  # Tech stocks move together
 INTRA_FINANCE_CORR = 0.5  # Finance stocks move together
-CROSS_GROUP_CORR = 0.3  # Between sectors
+CROSS_GROUP_CORR = 0.3  # Between sectors / unknown tickers
 TSLA_CORR = 0.3  # TSLA does its own thing
-DEFAULT_CORR = 0.3  # Unknown tickers
