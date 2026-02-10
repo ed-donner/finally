@@ -9,6 +9,7 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "numpy>=2.0.0",
     "massive>=1.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
