@@ -1,0 +1,1 @@
+"""FinAlly backend application."""
