@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Live-updating prices, instant fake-money trading, and AI chat that analyzes and trades -- all in a dark terminal aesthetic from one Docker container.
-**Current focus:** Phases 2 and 3 executing in parallel (Portfolio & Watchlist)
+**Current focus:** Phase 2 complete. Phase 3 complete. Ready for Phase 4 (App Assembly).
 
 ## Current Position
 
-Phase: 2 of 10 (Portfolio & Trade Execution)
-Plan: 1 of 2 in current phase (Plan 01 COMPLETE)
-Status: Phase 2 Plan 01 complete (service layer). Phase 3 also complete. Full suite 114 tests green.
-Last activity: 2026-02-11 -- Phase 2 Plan 01 complete (portfolio service layer)
+Phase: 2 of 10 (Portfolio & Trade Execution) -- COMPLETE
+Plan: 2 of 2 in current phase (Plan 02 COMPLETE)
+Status: Phase 2 complete (service layer + routes + snapshots). Phase 3 also complete. Full suite 139 tests green.
+Last activity: 2026-02-11 -- Phase 2 Plan 02 complete (portfolio routes & snapshot task)
 
-Progress: [██░░░░░░░░] 25%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 2.7min
-- Total execution time: 8min
+- Total plans completed: 4
+- Average duration: 2.75min
+- Total execution time: 11min
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [██░░░░░░░░] 25%
 | Phase 01 P01 | 2min | 2 tasks | 12 files |
 | Phase 03 P01 | 3min | 2 tasks | 8 files |
 | Phase 02 P01 | 3min | 2 tasks | 6 files |
+| Phase 02 P02 | 3min | 2 tasks | 7 files |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 3min, 3min
+- Last 5 plans: 2min, 3min, 3min, 3min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -55,6 +56,9 @@ Recent decisions affecting current work:
 - [Phase 02]: SQL-level weighted avg cost via ON CONFLICT DO UPDATE, not Python-side calc
 - [Phase 02]: Explicit BEGIN/COMMIT/ROLLBACK for atomic multi-table writes
 - [Phase 02]: Service functions take (db, price_cache) as explicit args -- dependency injection pattern
+- [Phase 02]: record_snapshot skips positions without current price in cache (graceful startup)
+- [Phase 02]: Immediate snapshot after each trade for real-time P&L chart accuracy
+- [Phase 02]: Background snapshot loop catches exceptions with logging to stay resilient
 
 ### Pending Todos
 
@@ -68,5 +72,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 02-01-PLAN.md (portfolio service layer)
+Stopped at: Completed 02-02-PLAN.md (portfolio routes & snapshot task) -- Phase 2 COMPLETE
 Resume file: None
