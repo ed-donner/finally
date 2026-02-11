@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 
 ## Current Position
 
-Phase: 4 of 10 (Phases 1-4 complete)
-Plan: All plans in Phase 4 complete
-Status: Phase 4 (App Assembly) complete. Backend fully assembled and runnable. 145 tests passing.
-Last activity: 2026-02-11 -- Phase 4 complete (145 tests passing)
+Phase: 5 of 10 (Phases 1-4 complete, Phase 5 Plan 1 of 2 done)
+Plan: 05-01 complete, 05-02 next
+Status: Phase 5 Plan 1 (LLM service layer) complete. 163 tests passing.
+Last activity: 2026-02-11 -- Phase 5 Plan 1 complete (163 tests passing)
 
-Progress: [████░░░░░░] 40%
+Progress: [████▌░░░░░] 45%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 3min
-- Total execution time: 15min
+- Total execution time: 19min
 
 **By Phase:**
 
@@ -32,9 +32,10 @@ Progress: [████░░░░░░] 40%
 | Phase 02 P02 | 3min | 2 tasks | 7 files |
 | Phase 03 P01 | 3min | 2 tasks | 8 files |
 | Phase 04 P01 | 4min | 2 tasks | 6 files |
+| Phase 05 P01 | 4min | 2 tasks | 9 files |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 3min, 3min, 3min, 4min
+- Last 5 plans: 3min, 3min, 3min, 4min, 4min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -62,6 +63,9 @@ Recent decisions affecting current work:
 - [Phase 03]: httpx AsyncClient + ASGITransport pattern for testing FastAPI routers
 - [Phase 04]: Static mount inside lifespan (after routers) to ensure API routes take priority over SPA catch-all
 - [Phase 04]: importlib.reload for test isolation of module-level config (DB_PATH, STATIC_DIR)
+- [Phase 05]: extra_body for response_format to bypass LiteLLM OpenRouter capability check
+- [Phase 05]: Defensive JSON parsing: model_validate_json with fallback to plain message
+- [Phase 05]: Error collection pattern: failed trades/watchlist changes as result entries, not exceptions
 
 ### Pending Todos
 
@@ -69,11 +73,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Research]: LiteLLM + OpenRouter structured output needs verification during Phase 5 planning (extra_body workaround)
 - [Research]: SSE buffering through Docker networking needs verification during Phase 10
 
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Phase 4 complete. Backend fully assembled. Ready for Phase 5 (LLM Chat).
+Stopped at: Completed 05-01-PLAN.md (LLM service layer). Ready for 05-02 (chat router).
 Resume file: None
