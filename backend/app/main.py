@@ -47,6 +47,12 @@ async def lifespan(app: FastAPI):
     app.include_router(create_portfolio_router(db, price_cache))
     app.include_router(create_watchlist_router(db, price_cache, market_source))
 
+    # Static files last so API routes take priority
+    if os.path.isdir(STATIC_DIR):
+        from app.static_files import SPAStaticFiles
+
+        app.mount("/", SPAStaticFiles(directory=STATIC_DIR, html=True), name="spa")
+
     logger.info("FinAlly ready with %d tickers", len(tickers))
     yield
 
@@ -65,9 +71,3 @@ app = FastAPI(title="FinAlly", lifespan=lifespan)
 async def health():
     """Health check endpoint."""
     return {"status": "healthy"}
-
-
-if os.path.isdir(STATIC_DIR):
-    from app.static_files import SPAStaticFiles
-
-    app.mount("/", SPAStaticFiles(directory=STATIC_DIR, html=True), name="spa")
