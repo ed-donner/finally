@@ -163,10 +163,11 @@ Plans:
   4. Start/stop scripts work on macOS/Linux (bash) and Windows (PowerShell)
   5. Playwright E2E tests pass against the Docker container with LLM_MOCK=true, covering fresh start, watchlist CRUD, buy/sell trades, portfolio updates, and AI chat
 
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 10-01-PLAN.md -- Dockerfile, docker-compose.yml, .dockerignore, .env.example, and start/stop scripts
+- [ ] 10-02-PLAN.md -- Playwright E2E test suite, docker-compose.test.yml, and human verification
 
 ## Progress
 
@@ -185,4 +186,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Watchlist & Price Display | 2/2 | ✓ Complete | 2026-02-11 |
 | 8. Portfolio Visualizations & Trading | 2/2 | ✓ Complete | 2026-02-11 |
 | 9. Chat Interface | 1/1 | ✓ Complete | 2026-02-11 |
-| 10. Packaging & Testing | 0/TBD | Not started | - |
+| 10. Packaging & Testing | 0/2 | Not started | - |
