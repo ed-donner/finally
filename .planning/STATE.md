@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Live-updating prices, instant fake-money trading, and AI chat that analyzes and trades -- all in a dark terminal aesthetic from one Docker container.
-**Current focus:** Phase 10 in progress - Packaging & Testing. Plan 01 complete.
+**Current focus:** Phase 10 complete - Packaging & Testing. All plans done.
 
 ## Current Position
 
-Phase: 10 of 10 (Phases 1-9 complete, Phase 10 in progress)
-Plan: 10-01 complete. Ready for 10-02.
-Status: Docker packaging complete: multi-stage Dockerfile, docker-compose.yml, start/stop scripts for macOS and Windows.
-Last activity: 2026-02-11 -- Phase 10 Plan 1 complete (Docker packaging)
+Phase: 10 of 10 (All phases complete)
+Plan: 10-02 complete. Human verification checkpoint pending (Task 3).
+Status: E2E testing complete: 14 Playwright tests pass against Docker container with LLM_MOCK=true.
+Last activity: 2026-02-11 -- Phase 10 Plan 2 complete (E2E testing)
 
-Progress: [█████████░] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
-- Average duration: 2min
-- Total execution time: 34min
+- Total plans completed: 15
+- Average duration: 4min
+- Total execution time: 60min
 
 **By Phase:**
 
@@ -41,10 +41,11 @@ Progress: [█████████░] 95%
 | Phase 08 P02 | 2min | 2 tasks | 4 files |
 | Phase 09 P01 | 1min | 2 tasks | 2 files |
 | Phase 10 P01 | 2min | 2 tasks | 8 files |
+| Phase 10 P02 | 26min | 2 tasks | 10 files |
 
 **Recent Trend:**
-- Last 5 plans: 1min, 1min, 2min, 1min, 2min
-- Trend: stable
+- Last 5 plans: 1min, 2min, 1min, 2min, 26min
+- Trend: E2E testing required iterative selector fixes
 
 *Updated after each plan completion*
 
@@ -97,6 +98,10 @@ Recent decisions affecting current work:
 - [Phase 10]: uv cache mount (--mount=type=cache) for faster Docker rebuilds
 - [Phase 10]: curl installed in image for docker healthcheck
 - [Phase 10]: Single CMD using .venv/bin/uvicorn directly (no activation needed)
+- [Phase 10]: Playwright 1.58.2 (latest) with Docker image v1.58.2-noble
+- [Phase 10]: Serial test execution (workers: 1) for shared backend state
+- [Phase 10]: CSS class selectors (div.flex-col, table.w-full) for precise element scoping
+- [Phase 10]: Null guards on Heatmap CustomContent pnl props (Recharts Treemap bug)
 
 ### Pending Todos
 
@@ -109,5 +114,5 @@ None. SSE buffering through Docker networking verified -- health check and front
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 10-01-PLAN.md (Docker packaging). Ready for 10-02-PLAN.md (E2E testing).
+Stopped at: Completed 10-02-PLAN.md (E2E testing). Human checkpoint pending.
 Resume file: None
