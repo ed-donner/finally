@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Live-updating prices, instant fake-money trading, and AI chat that analyzes and trades -- all in a dark terminal aesthetic from one Docker container.
-**Current focus:** Phase 7 - Watchlist Price Display (Plan 1 complete)
+**Current focus:** Phase 7 complete. Ready for Phase 8 - Portfolio Visualization.
 
 ## Current Position
 
-Phase: 7 of 10 (Phases 1-6 complete, Phase 7 Plan 1 complete)
-Plan: 07-01 complete. Ready for 07-02.
-Status: Watchlist panel live with price flash animations, sparklines, ticker CRUD. Frontend builds to static export.
-Last activity: 2026-02-11 -- Phase 7 Plan 1 complete (watchlist price display)
+Phase: 7 of 10 (Phases 1-7 complete)
+Plan: 07-02 complete. Phase 7 done. Ready for Phase 8.
+Status: Watchlist panel and chart panel live. Canvas-based chart with real-time price streaming via lightweight-charts v5.
+Last activity: 2026-02-11 -- Phase 7 Plan 2 complete (chart panel)
 
-Progress: [███████░░░] 65%
+Progress: [████████░░] 70%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 3min
-- Total execution time: 27min
+- Total execution time: 28min
 
 **By Phase:**
 
@@ -36,10 +36,11 @@ Progress: [███████░░░] 65%
 | Phase 05 P02 | 3min | 2 tasks | 5 files |
 | Phase 06 P01 | 3min | 2 tasks | 16 files |
 | Phase 07 P01 | 2min | 2 tasks | 7 files |
+| Phase 07 P02 | 1min | 1 task | 3 files |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 4min, 3min, 3min, 2min
-- Trend: stable/improving
+- Last 5 plans: 4min, 3min, 3min, 2min, 1min
+- Trend: improving
 
 *Updated after each plan completion*
 
@@ -78,6 +79,8 @@ Recent decisions affecting current work:
 - [Phase 07]: React key remounting (key=ticker+timestamp) for CSS flash animation trigger
 - [Phase 07]: Hand-rolled SVG polyline sparkline rather than charting library for mini-charts
 - [Phase 07]: Price history capped at 5000 points per ticker to bound memory usage
+- [Phase 07]: lightweight-charts v5 addSeries(LineSeries) API with UTCTimestamp branded type cast
+- [Phase 07]: Chart created once in useEffect, data synced separately via setData with full history array
 
 ### Pending Todos
 
@@ -90,5 +93,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 07-01-PLAN.md (watchlist price display). Ready for 07-02.
+Stopped at: Completed 07-02-PLAN.md (chart panel). Phase 7 done. Ready for Phase 8.
 Resume file: None
