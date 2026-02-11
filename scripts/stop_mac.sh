@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONTAINER_NAME="finally"
+CONTAINER_NAME="finally_agents"
 
 if docker ps -q -f name="$CONTAINER_NAME" | grep -q .; then
     echo "Stopping FinAlly..."

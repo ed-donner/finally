@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONTAINER_NAME="finally"
-IMAGE_NAME="finally"
-VOLUME_NAME="finally-data"
-PORT=8000
+CONTAINER_NAME="finally_agents"
+IMAGE_NAME="finally_agents"
+VOLUME_NAME="finally-data-agents"
+PORT=8001
 
 cd "$(dirname "$0")/.."
 
