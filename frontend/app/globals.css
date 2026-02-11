@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg-primary: #0d1117;
+  --color-bg-secondary: #161b22;
+  --color-bg-tertiary: #1a1a2e;
+  --color-border: #30363d;
+  --color-text-primary: #e6edf3;
+  --color-text-secondary: #8b949e;
+  --color-accent-yellow: #ecad0a;
+  --color-blue-primary: #209dd7;
+  --color-purple: #753991;
+  --color-green: #3fb950;
+  --color-red: #f85149;
+}
+
+body {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+  font-size: 13px;
+}
+
+/* Price flash animations */
+@keyframes flash-green {
+  0% { background-color: rgba(63, 185, 80, 0.3); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flash-red {
+  0% { background-color: rgba(248, 81, 73, 0.3); }
+  100% { background-color: transparent; }
+}
+
+.flash-up {
+  animation: flash-green 0.5s ease-out;
+}
+
+.flash-down {
+  animation: flash-red 0.5s ease-out;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
