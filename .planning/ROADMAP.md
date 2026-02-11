@@ -132,10 +132,11 @@ Plans:
   3. Positions table displays all holdings with ticker, quantity, avg cost, current price, unrealized P&L, and % change
   4. Trade bar allows entering a ticker and quantity, clicking buy or sell, and seeing the portfolio update immediately without a confirmation dialog
   5. Trade validation errors display inline with clear feedback
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 08-01: TBD
+- [ ] 08-01-PLAN.md -- Portfolio store extension, Recharts Treemap heatmap, and lightweight-charts P&L area chart
+- [ ] 08-02-PLAN.md -- Positions table, trade bar, and wiring into grid layout
 
 ### Phase 9: Chat Interface
 **Goal**: Users can chat with the AI assistant and see trade executions and watchlist changes rendered inline as action confirmations
