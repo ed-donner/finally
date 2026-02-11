@@ -101,10 +101,10 @@ Plans:
   2. The header shows portfolio total value, cash balance, and a connection status dot (green when connected, yellow when reconnecting, red when disconnected)
   3. SSE connection to /api/stream/prices is established on page load and automatically reconnects after disconnection
   4. Layout contains placeholder regions for watchlist, chart area, portfolio area, and chat panel -- all visible on a desktop-width screen
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 06-01: TBD
+- [ ] 06-01-PLAN.md -- Next.js static export with Tailwind v4 dark theme, CSS Grid terminal layout, Zustand stores, SSE price stream, and Header with live portfolio data
 
 ### Phase 7: Watchlist & Price Display
 **Goal**: Users see a live-updating watchlist with price flash animations and can click tickers to view price charts
@@ -179,7 +179,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 3. Watchlist API | 1/1 | ✓ Complete | 2026-02-11 |
 | 4. App Assembly | 1/1 | ✓ Complete | 2026-02-11 |
 | 5. LLM Chat Integration | 2/2 | ✓ Complete | 2026-02-11 |
-| 6. Frontend Foundation | 0/TBD | Not started | - |
+| 6. Frontend Foundation | 0/1 | Not started | - |
 | 7. Watchlist & Price Display | 0/TBD | Not started | - |
 | 8. Portfolio Visualizations & Trading | 0/TBD | Not started | - |
 | 9. Chat Interface | 0/TBD | Not started | - |
