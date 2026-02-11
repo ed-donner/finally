@@ -9,7 +9,7 @@ FinAlly builds outward from its existing market data subsystem: first a database
 - [x] **Phase 1: Database Foundation** - SQLite with lazy initialization, schema, and seed data ✓
 - [x] **Phase 2: Portfolio & Trade Execution** - Positions, cash management, trade validation, snapshots, REST API ✓
 - [x] **Phase 3: Watchlist API** - CRUD endpoints with market data source synchronization ✓
-- [ ] **Phase 4: App Assembly** - FastAPI lifespan, route mounting, static serving, health check
+- [x] **Phase 4: App Assembly** - FastAPI lifespan, route mounting, static serving, health check ✓
 - [ ] **Phase 5: LLM Chat Integration** - AI assistant with structured outputs, auto-execution, mock mode
 - [ ] **Phase 6: Frontend Foundation** - Next.js static export, dark theme, layout shell, SSE connection
 - [ ] **Phase 7: Watchlist & Price Display** - Live watchlist with flash animations, sparklines, main chart
@@ -74,7 +74,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 04-01-PLAN.md -- FastAPI app with lifespan wiring, health check, SPA static serving, and integration tests
+- [x] 04-01-PLAN.md -- FastAPI app with lifespan wiring, health check, SPA static serving, and integration tests ✓
 
 ### Phase 5: LLM Chat Integration
 **Goal**: Users can converse with an AI assistant that understands their portfolio and can execute trades and manage the watchlist through natural language
@@ -176,7 +176,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 1. Database Foundation | 1/1 | ✓ Complete | 2026-02-11 |
 | 2. Portfolio & Trade Execution | 2/2 | ✓ Complete | 2026-02-11 |
 | 3. Watchlist API | 1/1 | ✓ Complete | 2026-02-11 |
-| 4. App Assembly | 0/1 | Not started | - |
+| 4. App Assembly | 1/1 | ✓ Complete | 2026-02-11 |
 | 5. LLM Chat Integration | 0/TBD | Not started | - |
 | 6. Frontend Foundation | 0/TBD | Not started | - |
 | 7. Watchlist & Price Display | 0/TBD | Not started | - |

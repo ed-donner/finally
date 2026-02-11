@@ -45,10 +45,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### App Assembly
 
-- [ ] **APP-01**: FastAPI app uses lifespan for startup/shutdown of market data source, database, and background tasks
-- [ ] **APP-02**: All API routes mounted under /api/* with correct path prefixes
-- [ ] **APP-03**: Static Next.js export served by FastAPI for all non-API routes
-- [ ] **APP-04**: Health check endpoint at GET /api/health
+- [x] **APP-01**: FastAPI app uses lifespan for startup/shutdown of market data source, database, and background tasks
+- [x] **APP-02**: All API routes mounted under /api/* with correct path prefixes
+- [x] **APP-03**: Static Next.js export served by FastAPI for all non-API routes
+- [x] **APP-04**: Health check endpoint at GET /api/health
 
 ### Frontend — Layout & Theme
 
@@ -170,10 +170,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHAT-06 | Phase 5 | Pending |
 | CHAT-07 | Phase 5 | Pending |
 | CHAT-08 | Phase 5 | Pending |
-| APP-01 | Phase 4 | Pending |
-| APP-02 | Phase 4 | Pending |
-| APP-03 | Phase 4 | Pending |
-| APP-04 | Phase 4 | Pending |
+| APP-01 | Phase 4 | Complete |
+| APP-02 | Phase 4 | Complete |
+| APP-03 | Phase 4 | Complete |
+| APP-04 | Phase 4 | Complete |
 | UI-01 | Phase 6 | Pending |
 | UI-02 | Phase 6 | Pending |
 | UI-03 | Phase 6 | Pending |
