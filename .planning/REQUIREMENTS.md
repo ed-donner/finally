@@ -52,10 +52,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Frontend — Layout & Theme
 
-- [ ] **UI-01**: Single-page dark terminal layout with Bloomberg-inspired aesthetic (backgrounds #0d1117/#1a1a2e, muted borders)
-- [ ] **UI-02**: Header displays total portfolio value (updating live), cash balance, and connection status indicator
-- [ ] **UI-03**: Layout is desktop-first, data-dense, functional on tablet
-- [ ] **UI-04**: Color scheme uses accent yellow (#ecad0a), blue primary (#209dd7), purple secondary (#753991)
+- [x] **UI-01**: Single-page dark terminal layout with Bloomberg-inspired aesthetic (backgrounds #0d1117/#1a1a2e, muted borders)
+- [x] **UI-02**: Header displays total portfolio value (updating live), cash balance, and connection status indicator
+- [x] **UI-03**: Layout is desktop-first, data-dense, functional on tablet
+- [x] **UI-04**: Color scheme uses accent yellow (#ecad0a), blue primary (#209dd7), purple secondary (#753991)
 
 ### Frontend — Watchlist
 
@@ -89,9 +89,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Frontend — Real-time
 
-- [ ] **FE-RT-01**: SSE connection to /api/stream/prices using native EventSource API
-- [ ] **FE-RT-02**: Automatic reconnection on disconnect
-- [ ] **FE-RT-03**: Connection status reflected in header indicator (green/yellow/red)
+- [x] **FE-RT-01**: SSE connection to /api/stream/prices using native EventSource API
+- [x] **FE-RT-02**: Automatic reconnection on disconnect
+- [x] **FE-RT-03**: Connection status reflected in header indicator (green/yellow/red)
 
 ### Packaging
 
@@ -174,10 +174,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | APP-02 | Phase 4 | Complete |
 | APP-03 | Phase 4 | Complete |
 | APP-04 | Phase 4 | Complete |
-| UI-01 | Phase 6 | Pending |
-| UI-02 | Phase 6 | Pending |
-| UI-03 | Phase 6 | Pending |
-| UI-04 | Phase 6 | Pending |
+| UI-01 | Phase 6 | Complete |
+| UI-02 | Phase 6 | Complete |
+| UI-03 | Phase 6 | Complete |
+| UI-04 | Phase 6 | Complete |
 | FE-WATCH-01 | Phase 7 | Pending |
 | FE-WATCH-02 | Phase 7 | Pending |
 | FE-WATCH-03 | Phase 7 | Pending |
@@ -196,9 +196,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FE-CHAT-03 | Phase 9 | Pending |
 | FE-CHAT-04 | Phase 9 | Pending |
 | FE-CHAT-05 | Phase 9 | Pending |
-| FE-RT-01 | Phase 6 | Pending |
-| FE-RT-02 | Phase 6 | Pending |
-| FE-RT-03 | Phase 6 | Pending |
+| FE-RT-01 | Phase 6 | Complete |
+| FE-RT-02 | Phase 6 | Complete |
+| FE-RT-03 | Phase 6 | Complete |
 | PKG-01 | Phase 10 | Pending |
 | PKG-02 | Phase 10 | Pending |
 | PKG-03 | Phase 10 | Pending |
@@ -216,4 +216,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after Phase 2 & 3 completion*
+*Last updated: 2026-02-11 after Phase 6 completion*

@@ -11,7 +11,7 @@ FinAlly builds outward from its existing market data subsystem: first a database
 - [x] **Phase 3: Watchlist API** - CRUD endpoints with market data source synchronization ✓
 - [x] **Phase 4: App Assembly** - FastAPI lifespan, route mounting, static serving, health check ✓
 - [x] **Phase 5: LLM Chat Integration** - AI assistant with structured outputs, auto-execution, mock mode ✓
-- [ ] **Phase 6: Frontend Foundation** - Next.js static export, dark theme, layout shell, SSE connection
+- [x] **Phase 6: Frontend Foundation** - Next.js static export, dark theme, layout shell, SSE connection ✓
 - [ ] **Phase 7: Watchlist & Price Display** - Live watchlist with flash animations, sparklines, main chart
 - [ ] **Phase 8: Portfolio Visualizations & Trading** - Heatmap, P&L chart, positions table, trade bar
 - [ ] **Phase 9: Chat Interface** - AI chat panel with message history and inline action confirmations
@@ -104,7 +104,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md -- Next.js static export with Tailwind v4 dark theme, CSS Grid terminal layout, Zustand stores, SSE price stream, and Header with live portfolio data
+- [x] 06-01-PLAN.md -- Next.js static export with Tailwind v4 dark theme, CSS Grid terminal layout, Zustand stores, SSE price stream, and Header with live portfolio data ✓
 
 ### Phase 7: Watchlist & Price Display
 **Goal**: Users see a live-updating watchlist with price flash animations and can click tickers to view price charts
@@ -179,7 +179,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 3. Watchlist API | 1/1 | ✓ Complete | 2026-02-11 |
 | 4. App Assembly | 1/1 | ✓ Complete | 2026-02-11 |
 | 5. LLM Chat Integration | 2/2 | ✓ Complete | 2026-02-11 |
-| 6. Frontend Foundation | 0/1 | Not started | - |
+| 6. Frontend Foundation | 1/1 | ✓ Complete | 2026-02-11 |
 | 7. Watchlist & Price Display | 0/TBD | Not started | - |
 | 8. Portfolio Visualizations & Trading | 0/TBD | Not started | - |
 | 9. Chat Interface | 0/TBD | Not started | - |
