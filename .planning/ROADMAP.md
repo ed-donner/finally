@@ -43,10 +43,11 @@ Plans:
   3. Attempting to buy with insufficient cash or sell more shares than owned returns a clear validation error
   4. GET /api/portfolio/history returns timestamped snapshots of portfolio value, with new snapshots appearing every 30 seconds and immediately after trades
   5. Every executed trade appears in an append-only trade history
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md -- Portfolio service layer: Pydantic models, trade execution, portfolio queries, and service tests
+- [ ] 02-02-PLAN.md -- Route factory, snapshot background task, HTTP endpoint tests
 
 ### Phase 3: Watchlist API
 **Goal**: Users can manage which tickers they watch, and changes propagate to the live price stream
@@ -173,7 +174,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Database Foundation | 1/1 | ✓ Complete | 2026-02-11 |
-| 2. Portfolio & Trade Execution | 0/TBD | Not started | - |
+| 2. Portfolio & Trade Execution | 0/2 | Planned | - |
 | 3. Watchlist API | 0/1 | Planned | - |
 | 4. App Assembly | 0/TBD | Not started | - |
 | 5. LLM Chat Integration | 0/TBD | Not started | - |
