@@ -86,10 +86,11 @@ Plans:
   3. When the AI response includes watchlist changes, tickers are added or removed and the market data source updates accordingly
   4. Failed AI-initiated trades (insufficient cash/shares) are reported in the chat response rather than silently dropped
   5. With LLM_MOCK=true, the endpoint returns deterministic responses without calling OpenRouter
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md -- LLM service layer: Pydantic models, prompt builder, mock mode, chat processing, and unit tests
+- [ ] 05-02-PLAN.md -- Chat router factory, main.py wiring, and HTTP endpoint tests
 
 ### Phase 6: Frontend Foundation
 **Goal**: A dark, terminal-aesthetic single-page app shell renders in the browser with live SSE price data flowing into application state
@@ -177,7 +178,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Portfolio & Trade Execution | 2/2 | ✓ Complete | 2026-02-11 |
 | 3. Watchlist API | 1/1 | ✓ Complete | 2026-02-11 |
 | 4. App Assembly | 1/1 | ✓ Complete | 2026-02-11 |
-| 5. LLM Chat Integration | 0/TBD | Not started | - |
+| 5. LLM Chat Integration | 0/2 | Not started | - |
 | 6. Frontend Foundation | 0/TBD | Not started | - |
 | 7. Watchlist & Price Display | 0/TBD | Not started | - |
 | 8. Portfolio Visualizations & Trading | 0/TBD | Not started | - |
