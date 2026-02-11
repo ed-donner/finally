@@ -56,10 +56,10 @@ Plans:
   1. GET /api/watchlist returns the current watchlist tickers with latest prices from PriceCache
   2. POST /api/watchlist with a new ticker adds it to the database and the market data source starts streaming prices for it
   3. DELETE /api/watchlist/{ticker} removes it from the database and the market data source stops streaming prices for it
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 03-01: TBD
+- [ ] 03-01-PLAN.md -- Watchlist models, service layer, and router factory with endpoint tests
 
 ### Phase 4: App Assembly
 **Goal**: A single FastAPI application starts up, initializes all resources, and serves all API routes on one port
@@ -174,7 +174,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 |-------|----------------|--------|-----------|
 | 1. Database Foundation | 1/1 | ✓ Complete | 2026-02-11 |
 | 2. Portfolio & Trade Execution | 0/TBD | Not started | - |
-| 3. Watchlist API | 0/TBD | Not started | - |
+| 3. Watchlist API | 0/1 | Planned | - |
 | 4. App Assembly | 0/TBD | Not started | - |
 | 5. LLM Chat Integration | 0/TBD | Not started | - |
 | 6. Frontend Foundation | 0/TBD | Not started | - |
