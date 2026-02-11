@@ -71,10 +71,10 @@ Plans:
   2. All API endpoints are accessible under /api/* with correct prefixes (portfolio, watchlist, chat, stream, health)
   3. GET /api/health returns a success response confirming the app is running
   4. Non-API routes serve static files (placeholder index.html until frontend is built)
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md -- FastAPI app with lifespan wiring, health check, SPA static serving, and integration tests
 
 ### Phase 5: LLM Chat Integration
 **Goal**: Users can converse with an AI assistant that understands their portfolio and can execute trades and manage the watchlist through natural language
@@ -176,7 +176,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 1. Database Foundation | 1/1 | ✓ Complete | 2026-02-11 |
 | 2. Portfolio & Trade Execution | 2/2 | ✓ Complete | 2026-02-11 |
 | 3. Watchlist API | 1/1 | ✓ Complete | 2026-02-11 |
-| 4. App Assembly | 0/TBD | Not started | - |
+| 4. App Assembly | 0/1 | Not started | - |
 | 5. LLM Chat Integration | 0/TBD | Not started | - |
 | 6. Frontend Foundation | 0/TBD | Not started | - |
 | 7. Watchlist & Price Display | 0/TBD | Not started | - |
