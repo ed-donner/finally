@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Live-updating prices, instant fake-money trading, and AI chat that analyzes and trades -- all in a dark terminal aesthetic from one Docker container.
-**Current focus:** Phase 4 - App Assembly
+**Current focus:** Phase 5 - LLM Chat Integration
 
 ## Current Position
 
-Phase: 3 of 10 (Phases 1-3 complete)
-Plan: All plans in Phases 1-3 complete
-Status: Phases 1, 2, 3 verified and complete. Ready for Phase 4 (App Assembly).
-Last activity: 2026-02-11 -- Phases 2 & 3 verified (139 tests passing)
+Phase: 4 of 10 (Phases 1-4 complete)
+Plan: All plans in Phase 4 complete
+Status: Phase 4 (App Assembly) complete. Backend fully assembled and runnable. 145 tests passing.
+Last activity: 2026-02-11 -- Phase 4 complete (145 tests passing)
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 2.75min
-- Total execution time: 11min
+- Total plans completed: 5
+- Average duration: 3min
+- Total execution time: 15min
 
 **By Phase:**
 
@@ -31,9 +31,10 @@ Progress: [███░░░░░░░] 30%
 | Phase 02 P01 | 3min | 2 tasks | 6 files |
 | Phase 02 P02 | 3min | 2 tasks | 7 files |
 | Phase 03 P01 | 3min | 2 tasks | 8 files |
+| Phase 04 P01 | 4min | 2 tasks | 6 files |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 3min, 3min, 3min
+- Last 5 plans: 2min, 3min, 3min, 3min, 4min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -59,6 +60,8 @@ Recent decisions affecting current work:
 - [Phase 03]: Service functions are pure async functions (not classes) taking db connection
 - [Phase 03]: Router uses closure-based factory pattern matching create_stream_router
 - [Phase 03]: httpx AsyncClient + ASGITransport pattern for testing FastAPI routers
+- [Phase 04]: Static mount inside lifespan (after routers) to ensure API routes take priority over SPA catch-all
+- [Phase 04]: importlib.reload for test isolation of module-level config (DB_PATH, STATIC_DIR)
 
 ### Pending Todos
 
@@ -72,5 +75,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Phases 2 & 3 complete. Ready for Phase 4 (App Assembly).
+Stopped at: Phase 4 complete. Backend fully assembled. Ready for Phase 5 (LLM Chat).
 Resume file: None
