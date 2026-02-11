@@ -14,6 +14,7 @@ from app.db import close_db, init_db
 from app.market import PriceCache, create_market_data_source, create_stream_router
 from app.portfolio import start_snapshot_task, stop_snapshot_task
 from app.routes.portfolio import create_portfolio_router
+from app.llm import create_chat_router
 from app.watchlist import create_watchlist_router, get_watchlist
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
     app.include_router(create_stream_router(price_cache))
     app.include_router(create_portfolio_router(db, price_cache))
     app.include_router(create_watchlist_router(db, price_cache, market_source))
+    app.include_router(create_chat_router(db, price_cache, market_source))
 
     # Static files last so API routes take priority
     if os.path.isdir(STATIC_DIR):
