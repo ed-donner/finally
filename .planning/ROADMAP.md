@@ -116,10 +116,11 @@ Plans:
   3. Sparkline mini-charts beside each ticker show price history accumulated from the SSE stream since page load
   4. Clicking a ticker in the watchlist shows a larger price-over-time chart in the main chart area using canvas-based rendering
   5. User can add and remove tickers from the watchlist through UI controls
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 07-01-PLAN.md -- Watchlist panel with price flash animations, sparklines, ticker selection, and add/remove controls
+- [ ] 07-02-PLAN.md -- Main chart panel with lightweight-charts v5 canvas rendering and real-time data
 
 ### Phase 8: Portfolio Visualizations & Trading
 **Goal**: Users can see their portfolio composition visually, track P&L over time, view all positions, and execute trades
