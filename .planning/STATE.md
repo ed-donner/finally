@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Live-updating prices, instant fake-money trading, and AI chat that analyzes and trades -- all in a dark terminal aesthetic from one Docker container.
-**Current focus:** Phase 8 complete - Portfolio Visualizations & Trading. Ready for Phase 9.
+**Current focus:** Phase 9 complete - Chat Interface. Ready for Phase 10.
 
 ## Current Position
 
-Phase: 8 of 10 (Phases 1-8 complete)
-Plan: 08-02 complete. Phase 8 done. Ready for Phase 9.
-Status: All portfolio visualization and trading components complete: Heatmap, PnlChart, PositionsTable, TradeBar wired into terminal grid.
-Last activity: 2026-02-11 -- Phase 8 Plan 2 complete (positions table, trade bar, layout integration)
+Phase: 9 of 10 (Phases 1-9 complete)
+Plan: 09-01 complete. Phase 9 done. Ready for Phase 10.
+Status: Chat interface complete: Zustand chat store with cross-store refresh, full ChatPanel with collapsible sidebar, message bubbles, inline action cards.
+Last activity: 2026-02-11 -- Phase 9 Plan 1 complete (chat store, ChatPanel component)
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: 3min
-- Total execution time: 31min
+- Total plans completed: 13
+- Average duration: 2min
+- Total execution time: 32min
 
 **By Phase:**
 
@@ -39,9 +39,10 @@ Progress: [████████░░] 80%
 | Phase 07 P02 | 1min | 1 task | 3 files |
 | Phase 08 P01 | 1min | 2 tasks | 5 files |
 | Phase 08 P02 | 2min | 2 tasks | 4 files |
+| Phase 09 P01 | 1min | 2 tasks | 2 files |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 2min, 1min, 1min, 2min
+- Last 5 plans: 2min, 1min, 1min, 2min, 1min
 - Trend: improving
 
 *Updated after each plan completion*
@@ -89,6 +90,9 @@ Recent decisions affecting current work:
 - [Phase 08]: Intl.NumberFormat for currency formatting consistent with Header.tsx pattern
 - [Phase 08]: usePortfolioStore.getState() to check tradeError after async executeTrade completes
 - [Phase 08]: Inline composition of PositionsTable + TradeBar in page.tsx grid cell
+- [Phase 09]: Optimistic user message: added to list before API call completes
+- [Phase 09]: Cross-store refresh only on successful actions (executed trades, applied watchlist changes)
+- [Phase 09]: Error messages rendered as assistant bubbles rather than toast/alert
 
 ### Pending Todos
 
@@ -101,5 +105,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 08-02-PLAN.md (positions table, trade bar, layout integration). Phase 8 done. Ready for Phase 9.
+Stopped at: Completed 09-01-PLAN.md (chat store, ChatPanel component). Phase 9 done. Ready for Phase 10.
 Resume file: None
