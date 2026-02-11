@@ -147,10 +147,10 @@ Plans:
   2. User can type a message and send it, with a loading indicator displayed while waiting for the AI response
   3. Conversation history scrolls and displays user and assistant messages distinctly
   4. AI-executed trades and watchlist changes appear inline as structured action confirmations (not just text)
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 09-01: TBD
+- [ ] 09-01-PLAN.md -- Chat Zustand store and full ChatPanel with collapsible sidebar, message history, and inline action cards
 
 ### Phase 10: Packaging & Testing
 **Goal**: The entire application runs from a single Docker container and passes end-to-end tests
@@ -184,5 +184,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 6. Frontend Foundation | 1/1 | ✓ Complete | 2026-02-11 |
 | 7. Watchlist & Price Display | 2/2 | ✓ Complete | 2026-02-11 |
 | 8. Portfolio Visualizations & Trading | 2/2 | ✓ Complete | 2026-02-11 |
-| 9. Chat Interface | 0/TBD | Not started | - |
+| 9. Chat Interface | 0/1 | Not started | - |
 | 10. Packaging & Testing | 0/TBD | Not started | - |
