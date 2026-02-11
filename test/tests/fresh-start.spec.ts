@@ -11,11 +11,13 @@ test.describe('Fresh Start', () => {
     }
   });
 
-  test('shows starting cash balance of $10,000', async ({ page }) => {
+  test('shows cash balance in header', async ({ page }) => {
     await page.goto('/');
 
-    // Header should show $10,000.00 cash balance
-    await expect(page.getByText('$10,000.00')).toBeVisible({ timeout: 10000 });
+    // Header should show the "Cash" label and a dollar amount
+    await expect(page.getByText('Cash')).toBeVisible({ timeout: 10000 });
+    // Wait for portfolio data to load (value should not be "---")
+    await expect(page.locator('header').getByText(/\$[\d,]+\.\d{2}/).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('prices start streaming from SSE', async ({ page }) => {

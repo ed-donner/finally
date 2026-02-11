@@ -24,14 +24,13 @@ test.describe('Watchlist CRUD', () => {
     // Wait for initial load
     await expect(page.getByText('NFLX', { exact: true }).first()).toBeVisible({ timeout: 15000 });
 
-    // The PriceCell remove button is opacity-0 by default, visible on hover
-    // Scope to the container div that holds the NFLX text
-    const nflxCell = page.locator('div', { has: page.getByText('NFLX', { exact: true }) }).first();
-    await nflxCell.hover();
+    // Each PriceCell is a div.group containing the ticker span and a remove button
+    // Use the .group class to scope to the correct row
+    const nflxRow = page.locator('.group', { has: page.getByText('NFLX', { exact: true }) });
+    await nflxRow.hover();
 
-    // Click the "x" remove button (force: true because opacity may not be fully transitioned)
-    const removeButton = nflxCell.locator('button', { hasText: 'x' });
-    await removeButton.click({ force: true });
+    // Click the "x" remove button within this specific row
+    await nflxRow.getByRole('button', { name: 'x' }).click({ force: true });
 
     // NFLX should no longer be visible
     await expect(page.getByText('NFLX', { exact: true })).not.toBeVisible({ timeout: 10000 });

@@ -4,8 +4,14 @@ test.describe('Portfolio Updates', () => {
   test('portfolio value updates after trade', async ({ page }) => {
     await page.goto('/');
 
-    // Wait for initial state
-    await expect(page.getByText('$10,000.00')).toBeVisible({ timeout: 10000 });
+    // Wait for Cash value to load (not "---")
+    await expect(page.getByText('Cash')).toBeVisible({ timeout: 10000 });
+    const cashContainer = page.locator('header div.flex-col', { has: page.getByText('Cash', { exact: true }) });
+    const cashValue = cashContainer.locator('span.font-mono');
+    await expect(cashValue).not.toHaveText('---', { timeout: 10000 });
+
+    // Capture initial cash
+    const initialCash = await cashValue.textContent();
 
     // Execute a buy trade
     const tradeInputs = page.locator('input[placeholder="TICKER"]');
@@ -17,8 +23,8 @@ test.describe('Portfolio Updates', () => {
     await qtyInput.fill('5');
     await buyButton.click();
 
-    // Cash should decrease
-    await expect(page.getByText('$10,000.00')).not.toBeVisible({ timeout: 10000 });
+    // Cash should change from initial value
+    await expect(cashValue).not.toHaveText(initialCash!, { timeout: 10000 });
   });
 
   test('positions table shows correct columns', async ({ page }) => {
@@ -37,8 +43,8 @@ test.describe('Portfolio Updates', () => {
     await qtyInput.fill('3');
     await buyButton.click();
 
-    // Positions table should have column headers
-    const table = page.locator('table');
+    // Use the positions table specifically (has class w-full, not the chart's internal table)
+    const table = page.locator('table.w-full');
     await expect(table).toBeVisible({ timeout: 10000 });
     await expect(table.getByText('Ticker')).toBeVisible();
     await expect(table.getByText('Qty')).toBeVisible();

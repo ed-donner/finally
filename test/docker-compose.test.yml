@@ -1,0 +1,27 @@
+services:
+  app:
+    build:
+      context: ..
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_MOCK=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  tests:
+    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    depends_on:
+      app:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      - BASE_URL=http://app:8000
+    command: npx playwright test
+    ipc: host
