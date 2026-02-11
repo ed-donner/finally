@@ -28,10 +28,10 @@ FinAlly builds outward from its existing market data subsystem: first a database
   2. Default user exists with $10,000 cash and 10 watchlist tickers after first initialization
   3. Multiple concurrent async operations (simulated reads and writes) complete without "database is locked" errors
   4. Restarting the backend with an existing database preserves all data without re-seeding
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 01-01: TBD
+- [ ] 01-01-PLAN.md -- Async SQLite module with schema, seed data, and comprehensive tests
 
 ### Phase 2: Portfolio & Trade Execution
 **Goal**: Users can trade shares at market prices and see accurate portfolio state through REST endpoints
