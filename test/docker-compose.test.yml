@@ -1,0 +1,13 @@
+services:
+  app:
+    image: finally
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_MOCK=true
+      - OPENROUTER_API_KEY=test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 10

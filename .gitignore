@@ -205,3 +205,18 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Node
+node_modules/
+
+# Next.js
+.next/
+frontend/out/
+
+# SQLite database (runtime)
+db/finally.db
+db/finally.db-journal
+db/finally.db-wal
+
+# Docker
+backend/static/
