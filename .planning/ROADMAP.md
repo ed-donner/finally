@@ -10,7 +10,7 @@ FinAlly builds outward from its existing market data subsystem: first a database
 - [x] **Phase 2: Portfolio & Trade Execution** - Positions, cash management, trade validation, snapshots, REST API ✓
 - [x] **Phase 3: Watchlist API** - CRUD endpoints with market data source synchronization ✓
 - [x] **Phase 4: App Assembly** - FastAPI lifespan, route mounting, static serving, health check ✓
-- [ ] **Phase 5: LLM Chat Integration** - AI assistant with structured outputs, auto-execution, mock mode
+- [x] **Phase 5: LLM Chat Integration** - AI assistant with structured outputs, auto-execution, mock mode ✓
 - [ ] **Phase 6: Frontend Foundation** - Next.js static export, dark theme, layout shell, SSE connection
 - [ ] **Phase 7: Watchlist & Price Display** - Live watchlist with flash animations, sparklines, main chart
 - [ ] **Phase 8: Portfolio Visualizations & Trading** - Heatmap, P&L chart, positions table, trade bar
@@ -89,8 +89,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- LLM service layer: Pydantic models, prompt builder, mock mode, chat processing, and unit tests
-- [ ] 05-02-PLAN.md -- Chat router factory, main.py wiring, and HTTP endpoint tests
+- [x] 05-01-PLAN.md -- LLM service layer: Pydantic models, prompt builder, mock mode, chat processing, and unit tests ✓
+- [x] 05-02-PLAN.md -- Chat router factory, main.py wiring, and HTTP endpoint tests ✓
 
 ### Phase 6: Frontend Foundation
 **Goal**: A dark, terminal-aesthetic single-page app shell renders in the browser with live SSE price data flowing into application state
@@ -178,7 +178,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Portfolio & Trade Execution | 2/2 | ✓ Complete | 2026-02-11 |
 | 3. Watchlist API | 1/1 | ✓ Complete | 2026-02-11 |
 | 4. App Assembly | 1/1 | ✓ Complete | 2026-02-11 |
-| 5. LLM Chat Integration | 0/2 | Not started | - |
+| 5. LLM Chat Integration | 2/2 | ✓ Complete | 2026-02-11 |
 | 6. Frontend Foundation | 0/TBD | Not started | - |
 | 7. Watchlist & Price Display | 0/TBD | Not started | - |
 | 8. Portfolio Visualizations & Trading | 0/TBD | Not started | - |

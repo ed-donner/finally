@@ -34,14 +34,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Chat
 
-- [ ] **CHAT-01**: User can send a message and receive an AI response with portfolio-aware analysis
-- [ ] **CHAT-02**: AI responses include structured output (message + optional trades + optional watchlist changes)
-- [ ] **CHAT-03**: Trades in AI response auto-execute through the same validation as manual trades
-- [ ] **CHAT-04**: Watchlist changes in AI response auto-apply (add/remove tickers)
-- [ ] **CHAT-05**: Failed trade executions from AI are reported in the chat response
-- [ ] **CHAT-06**: Chat messages (user and assistant) persist in database with executed actions
-- [ ] **CHAT-07**: Recent conversation history included in LLM context for continuity
-- [ ] **CHAT-08**: Mock LLM mode returns deterministic responses when LLM_MOCK=true
+- [x] **CHAT-01**: User can send a message and receive an AI response with portfolio-aware analysis
+- [x] **CHAT-02**: AI responses include structured output (message + optional trades + optional watchlist changes)
+- [x] **CHAT-03**: Trades in AI response auto-execute through the same validation as manual trades
+- [x] **CHAT-04**: Watchlist changes in AI response auto-apply (add/remove tickers)
+- [x] **CHAT-05**: Failed trade executions from AI are reported in the chat response
+- [x] **CHAT-06**: Chat messages (user and assistant) persist in database with executed actions
+- [x] **CHAT-07**: Recent conversation history included in LLM context for continuity
+- [x] **CHAT-08**: Mock LLM mode returns deterministic responses when LLM_MOCK=true
 
 ### App Assembly
 
@@ -162,14 +162,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WATCH-02 | Phase 3 | Complete |
 | WATCH-03 | Phase 3 | Complete |
 | WATCH-04 | Phase 3 | Complete |
-| CHAT-01 | Phase 5 | Pending |
-| CHAT-02 | Phase 5 | Pending |
-| CHAT-03 | Phase 5 | Pending |
-| CHAT-04 | Phase 5 | Pending |
-| CHAT-05 | Phase 5 | Pending |
-| CHAT-06 | Phase 5 | Pending |
-| CHAT-07 | Phase 5 | Pending |
-| CHAT-08 | Phase 5 | Pending |
+| CHAT-01 | Phase 5 | Complete |
+| CHAT-02 | Phase 5 | Complete |
+| CHAT-03 | Phase 5 | Complete |
+| CHAT-04 | Phase 5 | Complete |
+| CHAT-05 | Phase 5 | Complete |
+| CHAT-06 | Phase 5 | Complete |
+| CHAT-07 | Phase 5 | Complete |
+| CHAT-08 | Phase 5 | Complete |
 | APP-01 | Phase 4 | Complete |
 | APP-02 | Phase 4 | Complete |
 | APP-03 | Phase 4 | Complete |
