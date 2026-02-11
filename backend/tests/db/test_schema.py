@@ -4,7 +4,6 @@ import sqlite3
 
 import pytest
 
-
 EXPECTED_TABLES = {
     "users_profile",
     "watchlist",
