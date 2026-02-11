@@ -7,8 +7,8 @@ FinAlly builds outward from its existing market data subsystem: first a database
 ## Phases
 
 - [x] **Phase 1: Database Foundation** - SQLite with lazy initialization, schema, and seed data ✓
-- [ ] **Phase 2: Portfolio & Trade Execution** - Positions, cash management, trade validation, snapshots, REST API
-- [ ] **Phase 3: Watchlist API** - CRUD endpoints with market data source synchronization
+- [x] **Phase 2: Portfolio & Trade Execution** - Positions, cash management, trade validation, snapshots, REST API ✓
+- [x] **Phase 3: Watchlist API** - CRUD endpoints with market data source synchronization ✓
 - [ ] **Phase 4: App Assembly** - FastAPI lifespan, route mounting, static serving, health check
 - [ ] **Phase 5: LLM Chat Integration** - AI assistant with structured outputs, auto-execution, mock mode
 - [ ] **Phase 6: Frontend Foundation** - Next.js static export, dark theme, layout shell, SSE connection
@@ -46,8 +46,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Portfolio service layer: Pydantic models, trade execution, portfolio queries, and service tests
-- [ ] 02-02-PLAN.md -- Route factory, snapshot background task, HTTP endpoint tests
+- [x] 02-01-PLAN.md -- Portfolio service layer: Pydantic models, trade execution, portfolio queries, and service tests ✓
+- [x] 02-02-PLAN.md -- Route factory, snapshot background task, HTTP endpoint tests ✓
 
 ### Phase 3: Watchlist API
 **Goal**: Users can manage which tickers they watch, and changes propagate to the live price stream
@@ -60,7 +60,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 03-01-PLAN.md -- Watchlist models, service layer, and router factory with endpoint tests
+- [x] 03-01-PLAN.md -- Watchlist models, service layer, and router factory with endpoint tests ✓
 
 ### Phase 4: App Assembly
 **Goal**: A single FastAPI application starts up, initializes all resources, and serves all API routes on one port
@@ -174,8 +174,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Database Foundation | 1/1 | ✓ Complete | 2026-02-11 |
-| 2. Portfolio & Trade Execution | 0/2 | Planned | - |
-| 3. Watchlist API | 0/1 | Planned | - |
+| 2. Portfolio & Trade Execution | 2/2 | ✓ Complete | 2026-02-11 |
+| 3. Watchlist API | 1/1 | ✓ Complete | 2026-02-11 |
 | 4. App Assembly | 0/TBD | Not started | - |
 | 5. LLM Chat Integration | 0/TBD | Not started | - |
 | 6. Frontend Foundation | 0/TBD | Not started | - |

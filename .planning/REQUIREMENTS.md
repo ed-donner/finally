@@ -16,21 +16,21 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Portfolio
 
-- [ ] **PORT-01**: User can view current positions with ticker, quantity, avg cost, current price, unrealized P&L, and % change
-- [ ] **PORT-02**: User can view cash balance and total portfolio value (cash + positions at current prices)
-- [ ] **PORT-03**: User can buy shares at current market price (deducts cash, creates/updates position)
-- [ ] **PORT-04**: User can sell shares at current market price (adds cash, reduces/removes position)
-- [ ] **PORT-05**: Trade validation rejects buys with insufficient cash and sells with insufficient shares
-- [ ] **PORT-06**: Every executed trade is recorded in trade history (append-only log)
-- [ ] **PORT-07**: Portfolio value snapshots recorded every 30 seconds and immediately after each trade
-- [ ] **PORT-08**: User can view portfolio value history over time (for P&L chart)
+- [x] **PORT-01**: User can view current positions with ticker, quantity, avg cost, current price, unrealized P&L, and % change
+- [x] **PORT-02**: User can view cash balance and total portfolio value (cash + positions at current prices)
+- [x] **PORT-03**: User can buy shares at current market price (deducts cash, creates/updates position)
+- [x] **PORT-04**: User can sell shares at current market price (adds cash, reduces/removes position)
+- [x] **PORT-05**: Trade validation rejects buys with insufficient cash and sells with insufficient shares
+- [x] **PORT-06**: Every executed trade is recorded in trade history (append-only log)
+- [x] **PORT-07**: Portfolio value snapshots recorded every 30 seconds and immediately after each trade
+- [x] **PORT-08**: User can view portfolio value history over time (for P&L chart)
 
 ### Watchlist
 
-- [ ] **WATCH-01**: User can view current watchlist tickers with latest prices
-- [ ] **WATCH-02**: User can add a ticker to the watchlist
-- [ ] **WATCH-03**: User can remove a ticker from the watchlist
-- [ ] **WATCH-04**: Watchlist changes sync with market data source (added tickers start streaming, removed tickers stop)
+- [x] **WATCH-01**: User can view current watchlist tickers with latest prices
+- [x] **WATCH-02**: User can add a ticker to the watchlist
+- [x] **WATCH-03**: User can remove a ticker from the watchlist
+- [x] **WATCH-04**: Watchlist changes sync with market data source (added tickers start streaming, removed tickers stop)
 
 ### Chat
 
@@ -150,18 +150,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DB-02 | Phase 1 | Complete |
 | DB-03 | Phase 1 | Complete |
 | DB-04 | Phase 1 | Complete |
-| PORT-01 | Phase 2 | Pending |
-| PORT-02 | Phase 2 | Pending |
-| PORT-03 | Phase 2 | Pending |
-| PORT-04 | Phase 2 | Pending |
-| PORT-05 | Phase 2 | Pending |
-| PORT-06 | Phase 2 | Pending |
-| PORT-07 | Phase 2 | Pending |
-| PORT-08 | Phase 2 | Pending |
-| WATCH-01 | Phase 3 | Pending |
-| WATCH-02 | Phase 3 | Pending |
-| WATCH-03 | Phase 3 | Pending |
-| WATCH-04 | Phase 3 | Pending |
+| PORT-01 | Phase 2 | Complete |
+| PORT-02 | Phase 2 | Complete |
+| PORT-03 | Phase 2 | Complete |
+| PORT-04 | Phase 2 | Complete |
+| PORT-05 | Phase 2 | Complete |
+| PORT-06 | Phase 2 | Complete |
+| PORT-07 | Phase 2 | Complete |
+| PORT-08 | Phase 2 | Complete |
+| WATCH-01 | Phase 3 | Complete |
+| WATCH-02 | Phase 3 | Complete |
+| WATCH-03 | Phase 3 | Complete |
+| WATCH-04 | Phase 3 | Complete |
 | CHAT-01 | Phase 5 | Pending |
 | CHAT-02 | Phase 5 | Pending |
 | CHAT-03 | Phase 5 | Pending |
@@ -216,4 +216,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after roadmap creation*
+*Last updated: 2026-02-11 after Phase 2 & 3 completion*
