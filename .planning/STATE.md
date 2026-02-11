@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Live-updating prices, instant fake-money trading, and AI chat that analyzes and trades -- all in a dark terminal aesthetic from one Docker container.
-**Current focus:** Phase 8 in progress - Portfolio Visualizations & Trading.
+**Current focus:** Phase 8 complete - Portfolio Visualizations & Trading. Ready for Phase 9.
 
 ## Current Position
 
-Phase: 8 of 10 (Phases 1-7 complete, Phase 8 Plan 1 complete)
-Plan: 08-01 complete. Ready for 08-02.
-Status: Portfolio store extended, Heatmap and PnlChart components created. Ready for positions table, trade bar, and layout integration.
-Last activity: 2026-02-11 -- Phase 8 Plan 1 complete (portfolio store & visualizations)
+Phase: 8 of 10 (Phases 1-8 complete)
+Plan: 08-02 complete. Phase 8 done. Ready for Phase 9.
+Status: All portfolio visualization and trading components complete: Heatmap, PnlChart, PositionsTable, TradeBar wired into terminal grid.
+Last activity: 2026-02-11 -- Phase 8 Plan 2 complete (positions table, trade bar, layout integration)
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
+- Total plans completed: 12
 - Average duration: 3min
-- Total execution time: 29min
+- Total execution time: 31min
 
 **By Phase:**
 
@@ -38,9 +38,10 @@ Progress: [████████░░] 75%
 | Phase 07 P01 | 2min | 2 tasks | 7 files |
 | Phase 07 P02 | 1min | 1 task | 3 files |
 | Phase 08 P01 | 1min | 2 tasks | 5 files |
+| Phase 08 P02 | 2min | 2 tasks | 4 files |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 3min, 2min, 1min, 1min
+- Last 5 plans: 3min, 2min, 1min, 1min, 2min
 - Trend: improving
 
 *Updated after each plan completion*
@@ -85,6 +86,9 @@ Recent decisions affecting current work:
 - [Phase 08]: Recharts Treemap with custom content prop (not deprecated Cell) for heatmap
 - [Phase 08]: P&L color: linear RGB interpolation red-neutral-green clamped at +/-10%
 - [Phase 08]: PnlChart follows exact same lifecycle pattern as ChartPanel (create once, sync data separately)
+- [Phase 08]: Intl.NumberFormat for currency formatting consistent with Header.tsx pattern
+- [Phase 08]: usePortfolioStore.getState() to check tradeError after async executeTrade completes
+- [Phase 08]: Inline composition of PositionsTable + TradeBar in page.tsx grid cell
 
 ### Pending Todos
 
@@ -97,5 +101,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 08-01-PLAN.md (portfolio store & visualizations). Ready for 08-02.
+Stopped at: Completed 08-02-PLAN.md (positions table, trade bar, layout integration). Phase 8 done. Ready for Phase 9.
 Resume file: None
