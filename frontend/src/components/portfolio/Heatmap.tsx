@@ -31,7 +31,7 @@ function CustomContent(props: any) {
         y={y}
         width={width}
         height={height}
-        fill={pnlColor(pnlPercent)}
+        fill={pnlColor(pnlPercent ?? 0)}
         stroke="#2d2d44"
         strokeWidth={1}
       />
@@ -55,8 +55,8 @@ function CustomContent(props: any) {
             fontSize={10}
             fontFamily="JetBrains Mono, monospace"
           >
-            {pnl >= 0 ? "+" : ""}
-            {pnl.toFixed(2)}%
+            {(pnl ?? 0) >= 0 ? "+" : ""}
+            {(pnl ?? 0).toFixed(2)}%
           </text>
         </>
       )}
