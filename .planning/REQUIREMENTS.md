@@ -95,18 +95,18 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Packaging
 
-- [ ] **PKG-01**: Multi-stage Dockerfile (Node 20 slim builds frontend, Python 3.12 slim runs backend)
-- [ ] **PKG-02**: Docker container serves everything on port 8000
-- [ ] **PKG-03**: SQLite database persists via Docker named volume
-- [ ] **PKG-04**: docker-compose.yml for convenience
-- [ ] **PKG-05**: Start/stop scripts for macOS/Linux (bash)
-- [ ] **PKG-06**: Start/stop scripts for Windows (PowerShell)
+- [x] **PKG-01**: Multi-stage Dockerfile (Node 20 slim builds frontend, Python 3.12 slim runs backend)
+- [x] **PKG-02**: Docker container serves everything on port 8000
+- [x] **PKG-03**: SQLite database persists via Docker named volume
+- [x] **PKG-04**: docker-compose.yml for convenience
+- [x] **PKG-05**: Start/stop scripts for macOS/Linux (bash)
+- [x] **PKG-06**: Start/stop scripts for Windows (PowerShell)
 
 ### Testing
 
-- [ ] **TEST-01**: E2E tests with Playwright covering: fresh start, watchlist CRUD, buy/sell trades, portfolio updates, AI chat (mocked)
-- [ ] **TEST-02**: E2E tests run against Docker container with LLM_MOCK=true
-- [ ] **TEST-03**: docker-compose.test.yml for test infrastructure
+- [x] **TEST-01**: E2E tests with Playwright covering: fresh start, watchlist CRUD, buy/sell trades, portfolio updates, AI chat (mocked)
+- [x] **TEST-02**: E2E tests run against Docker container with LLM_MOCK=true
+- [x] **TEST-03**: docker-compose.test.yml for test infrastructure
 
 ## v2 Requirements
 
@@ -199,15 +199,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FE-RT-01 | Phase 6 | Complete |
 | FE-RT-02 | Phase 6 | Complete |
 | FE-RT-03 | Phase 6 | Complete |
-| PKG-01 | Phase 10 | Pending |
-| PKG-02 | Phase 10 | Pending |
-| PKG-03 | Phase 10 | Pending |
-| PKG-04 | Phase 10 | Pending |
-| PKG-05 | Phase 10 | Pending |
-| PKG-06 | Phase 10 | Pending |
-| TEST-01 | Phase 10 | Pending |
-| TEST-02 | Phase 10 | Pending |
-| TEST-03 | Phase 10 | Pending |
+| PKG-01 | Phase 10 | Complete |
+| PKG-02 | Phase 10 | Complete |
+| PKG-03 | Phase 10 | Complete |
+| PKG-04 | Phase 10 | Complete |
+| PKG-05 | Phase 10 | Complete |
+| PKG-06 | Phase 10 | Complete |
+| TEST-01 | Phase 10 | Complete |
+| TEST-02 | Phase 10 | Complete |
+| TEST-03 | Phase 10 | Complete |
 
 **Coverage:**
 - v1 requirements: 62 total
@@ -216,4 +216,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after Phase 9 completion*
+*Last updated: 2026-02-11 after Phase 10 completion — ALL v1 REQUIREMENTS COMPLETE*
