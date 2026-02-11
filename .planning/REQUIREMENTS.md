@@ -81,11 +81,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Frontend — Chat
 
-- [ ] **FE-CHAT-01**: AI chat panel as docked/collapsible sidebar
-- [ ] **FE-CHAT-02**: Message input with send functionality
-- [ ] **FE-CHAT-03**: Scrolling conversation history
-- [ ] **FE-CHAT-04**: Loading indicator while waiting for LLM response
-- [ ] **FE-CHAT-05**: Trade executions and watchlist changes shown inline as action confirmations
+- [x] **FE-CHAT-01**: AI chat panel as docked/collapsible sidebar
+- [x] **FE-CHAT-02**: Message input with send functionality
+- [x] **FE-CHAT-03**: Scrolling conversation history
+- [x] **FE-CHAT-04**: Loading indicator while waiting for LLM response
+- [x] **FE-CHAT-05**: Trade executions and watchlist changes shown inline as action confirmations
 
 ### Frontend — Real-time
 
@@ -191,11 +191,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FE-TRADE-02 | Phase 8 | Complete |
 | FE-TRADE-03 | Phase 8 | Complete |
 | FE-TRADE-04 | Phase 8 | Complete |
-| FE-CHAT-01 | Phase 9 | Pending |
-| FE-CHAT-02 | Phase 9 | Pending |
-| FE-CHAT-03 | Phase 9 | Pending |
-| FE-CHAT-04 | Phase 9 | Pending |
-| FE-CHAT-05 | Phase 9 | Pending |
+| FE-CHAT-01 | Phase 9 | Complete |
+| FE-CHAT-02 | Phase 9 | Complete |
+| FE-CHAT-03 | Phase 9 | Complete |
+| FE-CHAT-04 | Phase 9 | Complete |
+| FE-CHAT-05 | Phase 9 | Complete |
 | FE-RT-01 | Phase 6 | Complete |
 | FE-RT-02 | Phase 6 | Complete |
 | FE-RT-03 | Phase 6 | Complete |
@@ -216,4 +216,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after Phase 8 completion*
+*Last updated: 2026-02-11 after Phase 9 completion*
