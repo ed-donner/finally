@@ -13,7 +13,7 @@ FinAlly builds outward from its existing market data subsystem: first a database
 - [x] **Phase 5: LLM Chat Integration** - AI assistant with structured outputs, auto-execution, mock mode ✓
 - [x] **Phase 6: Frontend Foundation** - Next.js static export, dark theme, layout shell, SSE connection ✓
 - [x] **Phase 7: Watchlist & Price Display** - Live watchlist with flash animations, sparklines, main chart ✓
-- [ ] **Phase 8: Portfolio Visualizations & Trading** - Heatmap, P&L chart, positions table, trade bar
+- [x] **Phase 8: Portfolio Visualizations & Trading** - Heatmap, P&L chart, positions table, trade bar ✓
 - [ ] **Phase 9: Chat Interface** - AI chat panel with message history and inline action confirmations
 - [ ] **Phase 10: Packaging & Testing** - Dockerfile, docker-compose, scripts, Playwright E2E tests
 
@@ -135,8 +135,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md -- Portfolio store extension, Recharts Treemap heatmap, and lightweight-charts P&L area chart
-- [ ] 08-02-PLAN.md -- Positions table, trade bar, and wiring into grid layout
+- [x] 08-01-PLAN.md -- Portfolio store extension, Recharts Treemap heatmap, and lightweight-charts P&L area chart ✓
+- [x] 08-02-PLAN.md -- Positions table, trade bar, and wiring into grid layout ✓
 
 ### Phase 9: Chat Interface
 **Goal**: Users can chat with the AI assistant and see trade executions and watchlist changes rendered inline as action confirmations
@@ -183,6 +183,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. LLM Chat Integration | 2/2 | ✓ Complete | 2026-02-11 |
 | 6. Frontend Foundation | 1/1 | ✓ Complete | 2026-02-11 |
 | 7. Watchlist & Price Display | 2/2 | ✓ Complete | 2026-02-11 |
-| 8. Portfolio Visualizations & Trading | 0/TBD | Not started | - |
+| 8. Portfolio Visualizations & Trading | 2/2 | ✓ Complete | 2026-02-11 |
 | 9. Chat Interface | 0/TBD | Not started | - |
 | 10. Packaging & Testing | 0/TBD | Not started | - |

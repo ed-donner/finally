@@ -69,15 +69,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **FE-CHART-01**: Main chart area shows price over time for the selected ticker (canvas-based, lightweight-charts)
 - [x] **FE-CHART-02**: Chart data accumulated from SSE stream since page load
-- [ ] **FE-CHART-03**: Portfolio heatmap (treemap) with positions sized by weight and colored by P&L (green=profit, red=loss)
-- [ ] **FE-CHART-04**: P&L line chart showing total portfolio value over time from snapshot data
+- [x] **FE-CHART-03**: Portfolio heatmap (treemap) with positions sized by weight and colored by P&L (green=profit, red=loss)
+- [x] **FE-CHART-04**: P&L line chart showing total portfolio value over time from snapshot data
 
 ### Frontend — Trading
 
-- [ ] **FE-TRADE-01**: Trade bar with ticker field, quantity field, buy button, and sell button
-- [ ] **FE-TRADE-02**: Trade execution is instant — no confirmation dialog
-- [ ] **FE-TRADE-03**: Trade errors displayed inline with clear feedback
-- [ ] **FE-TRADE-04**: Positions table shows all holdings with ticker, qty, avg cost, current price, unrealized P&L, % change
+- [x] **FE-TRADE-01**: Trade bar with ticker field, quantity field, buy button, and sell button
+- [x] **FE-TRADE-02**: Trade execution is instant — no confirmation dialog
+- [x] **FE-TRADE-03**: Trade errors displayed inline with clear feedback
+- [x] **FE-TRADE-04**: Positions table shows all holdings with ticker, qty, avg cost, current price, unrealized P&L, % change
 
 ### Frontend — Chat
 
@@ -185,12 +185,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FE-WATCH-05 | Phase 7 | Complete |
 | FE-CHART-01 | Phase 7 | Complete |
 | FE-CHART-02 | Phase 7 | Complete |
-| FE-CHART-03 | Phase 8 | Pending |
-| FE-CHART-04 | Phase 8 | Pending |
-| FE-TRADE-01 | Phase 8 | Pending |
-| FE-TRADE-02 | Phase 8 | Pending |
-| FE-TRADE-03 | Phase 8 | Pending |
-| FE-TRADE-04 | Phase 8 | Pending |
+| FE-CHART-03 | Phase 8 | Complete |
+| FE-CHART-04 | Phase 8 | Complete |
+| FE-TRADE-01 | Phase 8 | Complete |
+| FE-TRADE-02 | Phase 8 | Complete |
+| FE-TRADE-03 | Phase 8 | Complete |
+| FE-TRADE-04 | Phase 8 | Complete |
 | FE-CHAT-01 | Phase 9 | Pending |
 | FE-CHAT-02 | Phase 9 | Pending |
 | FE-CHAT-03 | Phase 9 | Pending |
@@ -216,4 +216,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after Phase 7 completion*
+*Last updated: 2026-02-11 after Phase 8 completion*
