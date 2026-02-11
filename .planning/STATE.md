@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Live-updating prices, instant fake-money trading, and AI chat that analyzes and trades -- all in a dark terminal aesthetic from one Docker container.
-**Current focus:** Phase 7 complete. Ready for Phase 8 - Portfolio Visualization.
+**Current focus:** Phase 8 in progress - Portfolio Visualizations & Trading.
 
 ## Current Position
 
-Phase: 7 of 10 (Phases 1-7 complete)
-Plan: 07-02 complete. Phase 7 done. Ready for Phase 8.
-Status: Watchlist panel and chart panel live. Canvas-based chart with real-time price streaming via lightweight-charts v5.
-Last activity: 2026-02-11 -- Phase 7 Plan 2 complete (chart panel)
+Phase: 8 of 10 (Phases 1-7 complete, Phase 8 Plan 1 complete)
+Plan: 08-01 complete. Ready for 08-02.
+Status: Portfolio store extended, Heatmap and PnlChart components created. Ready for positions table, trade bar, and layout integration.
+Last activity: 2026-02-11 -- Phase 8 Plan 1 complete (portfolio store & visualizations)
 
-Progress: [████████░░] 70%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 11
 - Average duration: 3min
-- Total execution time: 28min
+- Total execution time: 29min
 
 **By Phase:**
 
@@ -37,9 +37,10 @@ Progress: [████████░░] 70%
 | Phase 06 P01 | 3min | 2 tasks | 16 files |
 | Phase 07 P01 | 2min | 2 tasks | 7 files |
 | Phase 07 P02 | 1min | 1 task | 3 files |
+| Phase 08 P01 | 1min | 2 tasks | 5 files |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 3min, 3min, 2min, 1min
+- Last 5 plans: 3min, 3min, 2min, 1min, 1min
 - Trend: improving
 
 *Updated after each plan completion*
@@ -81,6 +82,9 @@ Recent decisions affecting current work:
 - [Phase 07]: Price history capped at 5000 points per ticker to bound memory usage
 - [Phase 07]: lightweight-charts v5 addSeries(LineSeries) API with UTCTimestamp branded type cast
 - [Phase 07]: Chart created once in useEffect, data synced separately via setData with full history array
+- [Phase 08]: Recharts Treemap with custom content prop (not deprecated Cell) for heatmap
+- [Phase 08]: P&L color: linear RGB interpolation red-neutral-green clamped at +/-10%
+- [Phase 08]: PnlChart follows exact same lifecycle pattern as ChartPanel (create once, sync data separately)
 
 ### Pending Todos
 
@@ -93,5 +97,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 07-02-PLAN.md (chart panel). Phase 7 done. Ready for Phase 8.
+Stopped at: Completed 08-01-PLAN.md (portfolio store & visualizations). Ready for 08-02.
 Resume file: None
