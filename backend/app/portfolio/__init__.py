@@ -1,6 +1,7 @@
 """Portfolio service layer for FinAlly.
 
-Provides trade execution, portfolio querying, and portfolio history retrieval.
+Provides trade execution, portfolio querying, portfolio history retrieval,
+and background snapshot recording.
 """
 
 from .models import (
@@ -12,6 +13,7 @@ from .models import (
     TradeResponse,
 )
 from .service import execute_trade, get_portfolio, get_portfolio_history
+from .snapshots import record_snapshot, start_snapshot_task, stop_snapshot_task
 
 __all__ = [
     "TradeRequest",
@@ -23,4 +25,7 @@ __all__ = [
     "execute_trade",
     "get_portfolio",
     "get_portfolio_history",
+    "record_snapshot",
+    "start_snapshot_task",
+    "stop_snapshot_task",
 ]
