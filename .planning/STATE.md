@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** Live-updating prices, instant fake-money trading, and AI chat that analyzes and trades -- all in a dark terminal aesthetic from one Docker container.
-**Current focus:** Phase 9 complete - Chat Interface. Ready for Phase 10.
+**Current focus:** Phase 10 in progress - Packaging & Testing. Plan 01 complete.
 
 ## Current Position
 
-Phase: 9 of 10 (Phases 1-9 complete)
-Plan: 09-01 complete. Phase 9 done. Ready for Phase 10.
-Status: Chat interface complete: Zustand chat store with cross-store refresh, full ChatPanel with collapsible sidebar, message bubbles, inline action cards.
-Last activity: 2026-02-11 -- Phase 9 Plan 1 complete (chat store, ChatPanel component)
+Phase: 10 of 10 (Phases 1-9 complete, Phase 10 in progress)
+Plan: 10-01 complete. Ready for 10-02.
+Status: Docker packaging complete: multi-stage Dockerfile, docker-compose.yml, start/stop scripts for macOS and Windows.
+Last activity: 2026-02-11 -- Phase 10 Plan 1 complete (Docker packaging)
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 95%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
+- Total plans completed: 14
 - Average duration: 2min
-- Total execution time: 32min
+- Total execution time: 34min
 
 **By Phase:**
 
@@ -40,10 +40,11 @@ Progress: [█████████░] 90%
 | Phase 08 P01 | 1min | 2 tasks | 5 files |
 | Phase 08 P02 | 2min | 2 tasks | 4 files |
 | Phase 09 P01 | 1min | 2 tasks | 2 files |
+| Phase 10 P01 | 2min | 2 tasks | 8 files |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 1min, 1min, 2min, 1min
-- Trend: improving
+- Last 5 plans: 1min, 1min, 2min, 1min, 2min
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -93,6 +94,9 @@ Recent decisions affecting current work:
 - [Phase 09]: Optimistic user message: added to list before API call completes
 - [Phase 09]: Cross-store refresh only on successful actions (executed trades, applied watchlist changes)
 - [Phase 09]: Error messages rendered as assistant bubbles rather than toast/alert
+- [Phase 10]: uv cache mount (--mount=type=cache) for faster Docker rebuilds
+- [Phase 10]: curl installed in image for docker healthcheck
+- [Phase 10]: Single CMD using .venv/bin/uvicorn directly (no activation needed)
 
 ### Pending Todos
 
@@ -100,10 +104,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Research]: SSE buffering through Docker networking needs verification during Phase 10
+None. SSE buffering through Docker networking verified -- health check and frontend load work correctly.
 
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 09-01-PLAN.md (chat store, ChatPanel component). Phase 9 done. Ready for Phase 10.
+Stopped at: Completed 10-01-PLAN.md (Docker packaging). Ready for 10-02-PLAN.md (E2E testing).
 Resume file: None
