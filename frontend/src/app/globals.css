@@ -18,3 +18,18 @@
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --font-sans: "Inter", ui-sans-serif, sans-serif;
 }
+
+@keyframes flash-up {
+  0% { background-color: rgba(34, 197, 94, 0.3); }
+  100% { background-color: transparent; }
+}
+@keyframes flash-down {
+  0% { background-color: rgba(239, 68, 68, 0.3); }
+  100% { background-color: transparent; }
+}
+.animate-flash-up {
+  animation: flash-up 500ms ease-out;
+}
+.animate-flash-down {
+  animation: flash-down 500ms ease-out;
+}
