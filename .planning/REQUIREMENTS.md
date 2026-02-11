@@ -146,74 +146,74 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | — | Pending |
-| DB-02 | — | Pending |
-| DB-03 | — | Pending |
-| DB-04 | — | Pending |
-| PORT-01 | — | Pending |
-| PORT-02 | — | Pending |
-| PORT-03 | — | Pending |
-| PORT-04 | — | Pending |
-| PORT-05 | — | Pending |
-| PORT-06 | — | Pending |
-| PORT-07 | — | Pending |
-| PORT-08 | — | Pending |
-| WATCH-01 | — | Pending |
-| WATCH-02 | — | Pending |
-| WATCH-03 | — | Pending |
-| WATCH-04 | — | Pending |
-| CHAT-01 | — | Pending |
-| CHAT-02 | — | Pending |
-| CHAT-03 | — | Pending |
-| CHAT-04 | — | Pending |
-| CHAT-05 | — | Pending |
-| CHAT-06 | — | Pending |
-| CHAT-07 | — | Pending |
-| CHAT-08 | — | Pending |
-| APP-01 | — | Pending |
-| APP-02 | — | Pending |
-| APP-03 | — | Pending |
-| APP-04 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| UI-03 | — | Pending |
-| UI-04 | — | Pending |
-| FE-WATCH-01 | — | Pending |
-| FE-WATCH-02 | — | Pending |
-| FE-WATCH-03 | — | Pending |
-| FE-WATCH-04 | — | Pending |
-| FE-WATCH-05 | — | Pending |
-| FE-CHART-01 | — | Pending |
-| FE-CHART-02 | — | Pending |
-| FE-CHART-03 | — | Pending |
-| FE-CHART-04 | — | Pending |
-| FE-TRADE-01 | — | Pending |
-| FE-TRADE-02 | — | Pending |
-| FE-TRADE-03 | — | Pending |
-| FE-TRADE-04 | — | Pending |
-| FE-CHAT-01 | — | Pending |
-| FE-CHAT-02 | — | Pending |
-| FE-CHAT-03 | — | Pending |
-| FE-CHAT-04 | — | Pending |
-| FE-CHAT-05 | — | Pending |
-| FE-RT-01 | — | Pending |
-| FE-RT-02 | — | Pending |
-| FE-RT-03 | — | Pending |
-| PKG-01 | — | Pending |
-| PKG-02 | — | Pending |
-| PKG-03 | — | Pending |
-| PKG-04 | — | Pending |
-| PKG-05 | — | Pending |
-| PKG-06 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
+| DB-01 | Phase 1 | Pending |
+| DB-02 | Phase 1 | Pending |
+| DB-03 | Phase 1 | Pending |
+| DB-04 | Phase 1 | Pending |
+| PORT-01 | Phase 2 | Pending |
+| PORT-02 | Phase 2 | Pending |
+| PORT-03 | Phase 2 | Pending |
+| PORT-04 | Phase 2 | Pending |
+| PORT-05 | Phase 2 | Pending |
+| PORT-06 | Phase 2 | Pending |
+| PORT-07 | Phase 2 | Pending |
+| PORT-08 | Phase 2 | Pending |
+| WATCH-01 | Phase 3 | Pending |
+| WATCH-02 | Phase 3 | Pending |
+| WATCH-03 | Phase 3 | Pending |
+| WATCH-04 | Phase 3 | Pending |
+| CHAT-01 | Phase 5 | Pending |
+| CHAT-02 | Phase 5 | Pending |
+| CHAT-03 | Phase 5 | Pending |
+| CHAT-04 | Phase 5 | Pending |
+| CHAT-05 | Phase 5 | Pending |
+| CHAT-06 | Phase 5 | Pending |
+| CHAT-07 | Phase 5 | Pending |
+| CHAT-08 | Phase 5 | Pending |
+| APP-01 | Phase 4 | Pending |
+| APP-02 | Phase 4 | Pending |
+| APP-03 | Phase 4 | Pending |
+| APP-04 | Phase 4 | Pending |
+| UI-01 | Phase 6 | Pending |
+| UI-02 | Phase 6 | Pending |
+| UI-03 | Phase 6 | Pending |
+| UI-04 | Phase 6 | Pending |
+| FE-WATCH-01 | Phase 7 | Pending |
+| FE-WATCH-02 | Phase 7 | Pending |
+| FE-WATCH-03 | Phase 7 | Pending |
+| FE-WATCH-04 | Phase 7 | Pending |
+| FE-WATCH-05 | Phase 7 | Pending |
+| FE-CHART-01 | Phase 7 | Pending |
+| FE-CHART-02 | Phase 7 | Pending |
+| FE-CHART-03 | Phase 8 | Pending |
+| FE-CHART-04 | Phase 8 | Pending |
+| FE-TRADE-01 | Phase 8 | Pending |
+| FE-TRADE-02 | Phase 8 | Pending |
+| FE-TRADE-03 | Phase 8 | Pending |
+| FE-TRADE-04 | Phase 8 | Pending |
+| FE-CHAT-01 | Phase 9 | Pending |
+| FE-CHAT-02 | Phase 9 | Pending |
+| FE-CHAT-03 | Phase 9 | Pending |
+| FE-CHAT-04 | Phase 9 | Pending |
+| FE-CHAT-05 | Phase 9 | Pending |
+| FE-RT-01 | Phase 6 | Pending |
+| FE-RT-02 | Phase 6 | Pending |
+| FE-RT-03 | Phase 6 | Pending |
+| PKG-01 | Phase 10 | Pending |
+| PKG-02 | Phase 10 | Pending |
+| PKG-03 | Phase 10 | Pending |
+| PKG-04 | Phase 10 | Pending |
+| PKG-05 | Phase 10 | Pending |
+| PKG-06 | Phase 10 | Pending |
+| TEST-01 | Phase 10 | Pending |
+| TEST-02 | Phase 10 | Pending |
+| TEST-03 | Phase 10 | Pending |
 
 **Coverage:**
-- v1 requirements: 56 total
-- Mapped to phases: 0
-- Unmapped: 56
+- v1 requirements: 62 total
+- Mapped to phases: 62
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after initial definition*
+*Last updated: 2026-02-11 after roadmap creation*
