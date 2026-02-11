@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePriceStream } from "@/hooks/use-price-stream";
 import { usePortfolioStore } from "@/stores/portfolio-store";
+import { useWatchlistStore } from "@/stores/watchlist-store";
 import { Header } from "@/components/layout/Header";
 import { TerminalGrid } from "@/components/layout/TerminalGrid";
 import { WatchlistPanel } from "@/components/panels/WatchlistPanel";
@@ -14,10 +15,12 @@ export default function Home() {
   usePriceStream();
 
   const fetchPortfolio = usePortfolioStore((s) => s.fetchPortfolio);
+  const fetchWatchlist = useWatchlistStore((s) => s.fetchWatchlist);
 
   useEffect(() => {
     fetchPortfolio();
-  }, [fetchPortfolio]);
+    fetchWatchlist();
+  }, [fetchPortfolio, fetchWatchlist]);
 
   return (
     <div className="h-screen flex flex-col bg-terminal-bg">
