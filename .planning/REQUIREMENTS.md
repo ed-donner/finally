@@ -59,16 +59,16 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Frontend — Watchlist
 
-- [ ] **FE-WATCH-01**: Watchlist panel shows grid of tickers with symbol, current price, daily change %, and direction indicator
-- [ ] **FE-WATCH-02**: Prices flash green (uptick) or red (downtick) with ~500ms CSS fade animation on each update
-- [ ] **FE-WATCH-03**: Sparkline mini-charts beside each ticker, accumulated from SSE stream since page load
-- [ ] **FE-WATCH-04**: Clicking a ticker selects it for the main chart area
-- [ ] **FE-WATCH-05**: User can add/remove tickers from watchlist via UI controls
+- [x] **FE-WATCH-01**: Watchlist panel shows grid of tickers with symbol, current price, daily change %, and direction indicator
+- [x] **FE-WATCH-02**: Prices flash green (uptick) or red (downtick) with ~500ms CSS fade animation on each update
+- [x] **FE-WATCH-03**: Sparkline mini-charts beside each ticker, accumulated from SSE stream since page load
+- [x] **FE-WATCH-04**: Clicking a ticker selects it for the main chart area
+- [x] **FE-WATCH-05**: User can add/remove tickers from watchlist via UI controls
 
 ### Frontend — Charts
 
-- [ ] **FE-CHART-01**: Main chart area shows price over time for the selected ticker (canvas-based, lightweight-charts)
-- [ ] **FE-CHART-02**: Chart data accumulated from SSE stream since page load
+- [x] **FE-CHART-01**: Main chart area shows price over time for the selected ticker (canvas-based, lightweight-charts)
+- [x] **FE-CHART-02**: Chart data accumulated from SSE stream since page load
 - [ ] **FE-CHART-03**: Portfolio heatmap (treemap) with positions sized by weight and colored by P&L (green=profit, red=loss)
 - [ ] **FE-CHART-04**: P&L line chart showing total portfolio value over time from snapshot data
 
@@ -178,13 +178,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UI-02 | Phase 6 | Complete |
 | UI-03 | Phase 6 | Complete |
 | UI-04 | Phase 6 | Complete |
-| FE-WATCH-01 | Phase 7 | Pending |
-| FE-WATCH-02 | Phase 7 | Pending |
-| FE-WATCH-03 | Phase 7 | Pending |
-| FE-WATCH-04 | Phase 7 | Pending |
-| FE-WATCH-05 | Phase 7 | Pending |
-| FE-CHART-01 | Phase 7 | Pending |
-| FE-CHART-02 | Phase 7 | Pending |
+| FE-WATCH-01 | Phase 7 | Complete |
+| FE-WATCH-02 | Phase 7 | Complete |
+| FE-WATCH-03 | Phase 7 | Complete |
+| FE-WATCH-04 | Phase 7 | Complete |
+| FE-WATCH-05 | Phase 7 | Complete |
+| FE-CHART-01 | Phase 7 | Complete |
+| FE-CHART-02 | Phase 7 | Complete |
 | FE-CHART-03 | Phase 8 | Pending |
 | FE-CHART-04 | Phase 8 | Pending |
 | FE-TRADE-01 | Phase 8 | Pending |
@@ -216,4 +216,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after Phase 6 completion*
+*Last updated: 2026-02-11 after Phase 7 completion*

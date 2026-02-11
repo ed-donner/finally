@@ -12,7 +12,7 @@ FinAlly builds outward from its existing market data subsystem: first a database
 - [x] **Phase 4: App Assembly** - FastAPI lifespan, route mounting, static serving, health check ✓
 - [x] **Phase 5: LLM Chat Integration** - AI assistant with structured outputs, auto-execution, mock mode ✓
 - [x] **Phase 6: Frontend Foundation** - Next.js static export, dark theme, layout shell, SSE connection ✓
-- [ ] **Phase 7: Watchlist & Price Display** - Live watchlist with flash animations, sparklines, main chart
+- [x] **Phase 7: Watchlist & Price Display** - Live watchlist with flash animations, sparklines, main chart ✓
 - [ ] **Phase 8: Portfolio Visualizations & Trading** - Heatmap, P&L chart, positions table, trade bar
 - [ ] **Phase 9: Chat Interface** - AI chat panel with message history and inline action confirmations
 - [ ] **Phase 10: Packaging & Testing** - Dockerfile, docker-compose, scripts, Playwright E2E tests
@@ -119,8 +119,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md -- Watchlist panel with price flash animations, sparklines, ticker selection, and add/remove controls
-- [ ] 07-02-PLAN.md -- Main chart panel with lightweight-charts v5 canvas rendering and real-time data
+- [x] 07-01-PLAN.md -- Watchlist panel with price flash animations, sparklines, ticker selection, and add/remove controls ✓
+- [x] 07-02-PLAN.md -- Main chart panel with lightweight-charts v5 canvas rendering and real-time data ✓
 
 ### Phase 8: Portfolio Visualizations & Trading
 **Goal**: Users can see their portfolio composition visually, track P&L over time, view all positions, and execute trades
@@ -181,7 +181,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 4. App Assembly | 1/1 | ✓ Complete | 2026-02-11 |
 | 5. LLM Chat Integration | 2/2 | ✓ Complete | 2026-02-11 |
 | 6. Frontend Foundation | 1/1 | ✓ Complete | 2026-02-11 |
-| 7. Watchlist & Price Display | 0/TBD | Not started | - |
+| 7. Watchlist & Price Display | 2/2 | ✓ Complete | 2026-02-11 |
 | 8. Portfolio Visualizations & Trading | 0/TBD | Not started | - |
 | 9. Chat Interface | 0/TBD | Not started | - |
 | 10. Packaging & Testing | 0/TBD | Not started | - |
