@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 
 ## Current Position
 
-Phase: 3 of 10 (Watchlist API)
-Plan: 1 of 1 in current phase (COMPLETE)
-Status: Phase 3 complete. Watchlist API with 16 tests, full backend suite 123 tests green.
-Last activity: 2026-02-11 -- Phase 3 Plan 01 complete (watchlist CRUD API)
+Phase: 2 of 10 (Portfolio & Trade Execution)
+Plan: 1 of 2 in current phase (Plan 01 COMPLETE)
+Status: Phase 2 Plan 01 complete (service layer). Phase 3 also complete. Full suite 114 tests green.
+Last activity: 2026-02-11 -- Phase 2 Plan 01 complete (portfolio service layer)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 2.5min
-- Total execution time: 5min
+- Total plans completed: 3
+- Average duration: 2.7min
+- Total execution time: 8min
 
 **By Phase:**
 
@@ -29,9 +29,10 @@ Progress: [██░░░░░░░░] 20%
 |-------|-------|-------|----------|
 | Phase 01 P01 | 2min | 2 tasks | 12 files |
 | Phase 03 P01 | 3min | 2 tasks | 8 files |
+| Phase 02 P01 | 3min | 2 tasks | 6 files |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 3min
+- Last 5 plans: 2min, 3min, 3min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -51,6 +52,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Service functions are pure async functions (not classes) taking db connection
 - [Phase 03]: Router uses closure-based factory pattern matching create_stream_router
 - [Phase 03]: httpx AsyncClient + ASGITransport pattern for testing FastAPI routers
+- [Phase 02]: SQL-level weighted avg cost via ON CONFLICT DO UPDATE, not Python-side calc
+- [Phase 02]: Explicit BEGIN/COMMIT/ROLLBACK for atomic multi-table writes
+- [Phase 02]: Service functions take (db, price_cache) as explicit args -- dependency injection pattern
 
 ### Pending Todos
 
@@ -64,5 +68,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 03-01-PLAN.md (watchlist API)
+Stopped at: Completed 02-01-PLAN.md (portfolio service layer)
 Resume file: None
