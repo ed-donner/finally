@@ -6,7 +6,7 @@ FinAlly builds outward from its existing market data subsystem: first a database
 
 ## Phases
 
-- [ ] **Phase 1: Database Foundation** - SQLite with lazy initialization, schema, and seed data
+- [x] **Phase 1: Database Foundation** - SQLite with lazy initialization, schema, and seed data ✓
 - [ ] **Phase 2: Portfolio & Trade Execution** - Positions, cash management, trade validation, snapshots, REST API
 - [ ] **Phase 3: Watchlist API** - CRUD endpoints with market data source synchronization
 - [ ] **Phase 4: App Assembly** - FastAPI lifespan, route mounting, static serving, health check
@@ -31,7 +31,7 @@ FinAlly builds outward from its existing market data subsystem: first a database
 **Plans:** 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md -- Async SQLite module with schema, seed data, and comprehensive tests
+- [x] 01-01-PLAN.md -- Async SQLite module with schema, seed data, and comprehensive tests ✓
 
 ### Phase 2: Portfolio & Trade Execution
 **Goal**: Users can trade shares at market prices and see accurate portfolio state through REST endpoints
@@ -172,7 +172,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Database Foundation | 0/TBD | Not started | - |
+| 1. Database Foundation | 1/1 | ✓ Complete | 2026-02-11 |
 | 2. Portfolio & Trade Execution | 0/TBD | Not started | - |
 | 3. Watchlist API | 0/TBD | Not started | - |
 | 4. App Assembly | 0/TBD | Not started | - |

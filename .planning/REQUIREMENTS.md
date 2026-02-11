@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Database
 
-- [ ] **DB-01**: SQLite database initializes lazily on first request — creates schema and seeds data if missing
-- [ ] **DB-02**: Schema includes all 6 tables: users_profile, watchlist, positions, trades, portfolio_snapshots, chat_messages
-- [ ] **DB-03**: Default seed data: one user with $10,000 cash and 10 watchlist tickers (AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX)
-- [ ] **DB-04**: SQLite uses WAL mode with busy_timeout for safe concurrent access
+- [x] **DB-01**: SQLite database initializes lazily on first request — creates schema and seeds data if missing
+- [x] **DB-02**: Schema includes all 6 tables: users_profile, watchlist, positions, trades, portfolio_snapshots, chat_messages
+- [x] **DB-03**: Default seed data: one user with $10,000 cash and 10 watchlist tickers (AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX)
+- [x] **DB-04**: SQLite uses WAL mode with busy_timeout for safe concurrent access
 
 ### Portfolio
 
@@ -146,10 +146,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | Phase 1 | Pending |
-| DB-02 | Phase 1 | Pending |
-| DB-03 | Phase 1 | Pending |
-| DB-04 | Phase 1 | Pending |
+| DB-01 | Phase 1 | Complete |
+| DB-02 | Phase 1 | Complete |
+| DB-03 | Phase 1 | Complete |
+| DB-04 | Phase 1 | Complete |
 | PORT-01 | Phase 2 | Pending |
 | PORT-02 | Phase 2 | Pending |
 | PORT-03 | Phase 2 | Pending |
