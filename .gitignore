@@ -136,6 +136,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -200,6 +202,12 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Project runtime/test artifacts
+db/finally.db
+test/node_modules/
+test/playwright-report/
+test/test-results/
 
 # Marimo
 marimo/_static/

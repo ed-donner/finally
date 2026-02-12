@@ -12,7 +12,7 @@ This is the capstone project for an agentic AI coding course. It is built entire
 
 ### First Launch
 
-The user runs a single Docker command (or a provided start script). A browser opens to `http://localhost:8000`. No login, no signup. They immediately see:
+The user runs a single Docker command (or a provided start script). A browser opens to `http://localhost:8003`. No login, no signup. They immediately see:
 
 - A watchlist of 10 default tickers with live-updating prices in a grid
 - $10,000 in virtual cash
@@ -49,7 +49,7 @@ The user runs a single Docker command (or a provided start script). A browser op
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Docker Container (port 8000)                   │
+│  Docker Container (port 8003)                   │
 │                                                 │
 │  FastAPI (Python/uv)                            │
 │  ├── /api/*          REST endpoints             │
@@ -385,18 +385,18 @@ Stage 2: Python 3.12 slim
   - Copy backend/
   - uv sync (install Python dependencies from lockfile)
   - Copy frontend build output into a static/ directory
-  - Expose port 8000
+  - Expose port 8003
   - CMD: uvicorn serving FastAPI app
 ```
 
-FastAPI serves the static frontend files and all API routes on port 8000.
+FastAPI serves the static frontend files and all API routes on port 8003.
 
 ### Docker Volume
 
 The SQLite database persists via a named Docker volume:
 
 ```bash
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
+docker run -v finally-data:/app/db -p 8003:8003 --env-file .env finally
 ```
 
 The `db/` directory in the project root maps to `/app/db` in the container. The backend writes `finally.db` to this path.

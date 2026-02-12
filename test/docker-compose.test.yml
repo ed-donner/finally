@@ -1,0 +1,51 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: finally:test
+    env_file:
+      - ../.env
+    environment:
+      PORT: "8003"
+      APP_MODULE: ${APP_MODULE:-app.main:app}
+      LLM_MOCK: ${TEST_LLM_MOCK:-true}
+    volumes:
+      - finally-test-data:/app/db
+    networks:
+      default:
+        aliases:
+          - sut
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8003/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  backend-tests:
+    image: finally:test
+    env_file:
+      - ../.env
+    environment:
+      LLM_MOCK: "true"
+    working_dir: /app/backend
+    command: sh -lc "uv sync --frozen --extra dev && uv run pytest -q"
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.58.2-jammy
+    working_dir: /work
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://sut:8003
+      CI: "true"
+      REAL_LLM_E2E: ${REAL_LLM_E2E:-false}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    volumes:
+      - ./:/work
+    command: sh -lc "npm ci && npx playwright test ${PLAYWRIGHT_TEST_ARGS:-}"
+
+volumes:
+  finally-test-data:
