@@ -2,11 +2,12 @@ interface SparklineProps {
   values: number[];
   stroke?: string;
   height?: number;
+  className?: string;
 }
 
-export const Sparkline = ({ values, stroke = '#209dd7', height = 34 }: SparklineProps) => {
+export const Sparkline = ({ values, stroke = '#209dd7', height = 34, className = 'h-8' }: SparklineProps) => {
   if (values.length === 0) {
-    return <div className="h-8 w-full rounded bg-terminal-panelAlt/40" />;
+    return <div className={`w-full rounded bg-terminal-panelAlt/40 ${className}`} />;
   }
   const normalizedValues = values.length === 1 ? [values[0], values[0]] : values;
 
@@ -24,7 +25,7 @@ export const Sparkline = ({ values, stroke = '#209dd7', height = 34 }: Sparkline
     .join(' ');
 
   return (
-    <svg width="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="h-8 w-full">
+    <svg width="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className={`w-full ${className}`}>
       <polyline fill="none" stroke={stroke} strokeWidth="2" points={points} />
     </svg>
   );
