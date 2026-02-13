@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 
 from massive import RESTClient
@@ -30,10 +31,12 @@ class MassiveDataSource(MarketDataSource):
         api_key: str,
         price_cache: PriceCache,
         poll_interval: float = 15.0,
+        stale_trade_seconds: float = 10.0,
     ) -> None:
         self._api_key = api_key
         self._cache = price_cache
         self._interval = poll_interval
+        self._stale_trade_seconds = max(stale_trade_seconds, 0.0)
         self._tickers: list[str] = []
         self._task: asyncio.Task | None = None
         self._client: RESTClient | None = None
@@ -98,8 +101,13 @@ class MassiveDataSource(MarketDataSource):
             processed = 0
             for snap in snapshots:
                 try:
-                    price = snap.last_trade.price
-                    timestamp = self._extract_snapshot_timestamp(snap)
+                    price, timestamp = self._resolve_price_and_timestamp(snap)
+                    if price is None:
+                        logger.warning(
+                            "Skipping snapshot for %s: no valid price candidates",
+                            getattr(snap, "ticker", "???"),
+                        )
+                        continue
                     day_baseline = self._extract_day_baseline(snap, price)
                     self._cache.update(
                         ticker=snap.ticker,
@@ -130,25 +138,96 @@ class MassiveDataSource(MarketDataSource):
             tickers=self._tickers,
         )
 
+    def _resolve_price_and_timestamp(self, snap) -> tuple[float | None, float]:
+        """Select best price source: fresh trade, then quote midpoint, then minute close."""
+        now = time.time()
+
+        trade_price = self._extract_trade_price(snap)
+        trade_ts = self._extract_trade_timestamp(snap)
+        if trade_price is not None and trade_ts is not None:
+            if now - trade_ts <= self._stale_trade_seconds:
+                return trade_price, trade_ts
+
+        quote_mid = self._extract_quote_midpoint(snap)
+        quote_ts = self._extract_quote_timestamp(snap)
+        if quote_mid is not None and quote_ts is not None:
+            return quote_mid, quote_ts
+
+        minute_close = self._extract_minute_close(snap)
+        minute_ts = self._extract_minute_timestamp(snap)
+        if minute_close is not None and minute_ts is not None:
+            return minute_close, minute_ts
+
+        if trade_price is not None:
+            return trade_price, trade_ts or now
+
+        return None, now
+
     @staticmethod
-    def _extract_snapshot_timestamp(snap) -> float:
-        """Return snapshot timestamp in Unix seconds across SDK schema variants."""
+    def _extract_trade_price(snap) -> float | None:
         trade = getattr(snap, "last_trade", None)
+        return MassiveDataSource._as_positive_number(getattr(trade, "price", None))
 
-        raw_ts = getattr(trade, "timestamp", None)
-        if raw_ts is None:
-            raw_ts = getattr(trade, "sip_timestamp", None)
-        if raw_ts is None:
-            raw_ts = getattr(trade, "participant_timestamp", None)
-        if raw_ts is None:
-            raw_ts = getattr(trade, "trf_timestamp", None)
-        if raw_ts is None:
-            raw_ts = getattr(snap, "updated", None)
+    @staticmethod
+    def _extract_quote_midpoint(snap) -> float | None:
+        quote = getattr(snap, "last_quote", None)
+        bid_value = MassiveDataSource._as_positive_number(getattr(quote, "bid_price", None))
+        ask_value = MassiveDataSource._as_positive_number(getattr(quote, "ask_price", None))
+        if bid_value is None or ask_value is None:
+            return None
+        return (bid_value + ask_value) / 2.0
 
-        if raw_ts is None:
-            return time.time()
+    @staticmethod
+    def _extract_minute_close(snap) -> float | None:
+        minute = getattr(snap, "min", None)
+        return MassiveDataSource._as_positive_number(getattr(minute, "close", None))
 
-        ts = float(raw_ts)
+    @classmethod
+    def _extract_trade_timestamp(cls, snap) -> float | None:
+        trade = getattr(snap, "last_trade", None)
+        raw_ts = cls._first_non_none(
+            getattr(trade, "timestamp", None),
+            getattr(trade, "sip_timestamp", None),
+            getattr(trade, "participant_timestamp", None),
+            getattr(trade, "trf_timestamp", None),
+            getattr(snap, "updated", None),
+        )
+        return cls._normalize_timestamp(raw_ts)
+
+    @classmethod
+    def _extract_quote_timestamp(cls, snap) -> float | None:
+        quote = getattr(snap, "last_quote", None)
+        raw_ts = cls._first_non_none(
+            getattr(quote, "timestamp", None),
+            getattr(quote, "sip_timestamp", None),
+            getattr(quote, "participant_timestamp", None),
+            getattr(quote, "trf_timestamp", None),
+            getattr(snap, "updated", None),
+        )
+        return cls._normalize_timestamp(raw_ts)
+
+    @classmethod
+    def _extract_minute_timestamp(cls, snap) -> float | None:
+        minute = getattr(snap, "min", None)
+        raw_ts = cls._first_non_none(
+            getattr(minute, "timestamp", None),
+            getattr(snap, "updated", None),
+        )
+        return cls._normalize_timestamp(raw_ts)
+
+    @staticmethod
+    def _first_non_none(*values):
+        for value in values:
+            if value is not None:
+                return value
+        return None
+
+    @staticmethod
+    def _normalize_timestamp(raw_ts) -> float | None:
+        """Normalize snapshot timestamp values to Unix seconds."""
+        ts = MassiveDataSource._as_number(raw_ts)
+        if ts is None:
+            return None
         # Massive timestamps may be seconds, milliseconds, microseconds, or nanoseconds.
         if ts > 1e17:  # nanoseconds
             return ts / 1e9
@@ -157,6 +236,24 @@ class MassiveDataSource(MarketDataSource):
         if ts > 1e11:  # milliseconds
             return ts / 1e3
         return ts
+
+    @staticmethod
+    def _as_number(value) -> float | None:
+        if isinstance(value, bool):
+            return None
+        if not isinstance(value, (int, float)):
+            return None
+        number = float(value)
+        if not math.isfinite(number):
+            return None
+        return number
+
+    @staticmethod
+    def _as_positive_number(value) -> float | None:
+        number = MassiveDataSource._as_number(value)
+        if number is None or number <= 0:
+            return None
+        return number
 
     @staticmethod
     def _extract_day_baseline(snap, price: float) -> float | None:

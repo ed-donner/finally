@@ -46,6 +46,7 @@ export default function HomePage() {
         <div className="min-h-0 min-w-0 xl:h-full">
           <WatchlistPanel
             watchlist={watchlist}
+            tickerHistory={tickerHistory}
             selectedTicker={selectedTicker}
             onSelectTicker={setSelectedTicker}
             onRemoveTicker={(ticker) => {

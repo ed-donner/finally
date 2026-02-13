@@ -25,18 +25,26 @@ def create_market_data_source(price_cache: PriceCache) -> MarketDataSource:
 
     if api_key:
         raw_interval = os.environ.get("MASSIVE_POLL_INTERVAL_SECONDS", "0.5").strip()
+        raw_stale_seconds = os.environ.get("MASSIVE_STALE_TRADE_SECONDS", "10").strip()
         try:
             poll_interval = float(raw_interval)
         except ValueError:
             poll_interval = 0.5
+        try:
+            stale_trade_seconds = float(raw_stale_seconds)
+        except ValueError:
+            stale_trade_seconds = 10.0
         if poll_interval <= 0:
             poll_interval = 0.5
+        if stale_trade_seconds < 0:
+            stale_trade_seconds = 10.0
 
         logger.info("Market data source: Massive API (real data, %.3fs poll)", poll_interval)
         return MassiveDataSource(
             api_key=api_key,
             price_cache=price_cache,
             poll_interval=poll_interval,
+            stale_trade_seconds=stale_trade_seconds,
         )
     else:
         logger.info("Market data source: GBM Simulator")

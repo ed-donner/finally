@@ -120,6 +120,21 @@ Fixes:
 
 Result: clicking watchlist symbols always renders chart content.
 
+## Watchlist Mini Charts (Reintroduction Plan)
+
+Goal: restore per-ticker mini moving charts in the 5x10 watchlist without degrading UI responsiveness.
+
+Implementation checklist:
+
+1. Pass frontend `tickerHistory` into `WatchlistPanel` so each row can access its series.
+2. Render a compact sparkline in each non-empty watchlist row under the ticker label.
+3. Keep series bounded (existing cap: 80 points) and render mini chart with low visual overhead.
+4. Use memoized row rendering to keep update work localized and predictable.
+5. Preserve fixed 10-row-per-column behavior and existing add/remove/select interactions.
+6. Re-run frontend unit tests and rebuild app container for runtime validation.
+
+Status: implemented on **2026-02-13** with memoized watchlist rows and compact per-row sparklines.
+
 ## Massive API Availability Validation
 
 Validation run date: **2026-02-13 (US pre-market morning)**.
@@ -152,4 +167,3 @@ Checks:
 For these UI changes to appear in the local app container, rebuild is required:
 
 - `./scripts/start_mac.sh --build`
-

@@ -1,5 +1,6 @@
 """Tests for MassiveDataSource (mocked)."""
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,6 +21,13 @@ def _make_snapshot(ticker: str, price: float, timestamp_ms: int) -> MagicMock:
     snap.prev_day = MagicMock()
     snap.prev_day.close = price - 2.0
     snap.todays_change = 1.0
+    snap.last_quote = MagicMock()
+    snap.last_quote.bid_price = None
+    snap.last_quote.ask_price = None
+    snap.last_quote.sip_timestamp = None
+    snap.min = MagicMock()
+    snap.min.close = None
+    snap.min.timestamp = None
     return snap
 
 
@@ -163,6 +171,69 @@ class TestMassiveDataSource:
         update = cache.get("AAPL")
         assert update is not None
         assert update.day_baseline_price == 189.0
+
+    async def test_prefers_fresh_last_trade_over_quote_and_minute(self):
+        """Use last trade when its timestamp is fresh."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0, stale_trade_seconds=10.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()
+
+        snap = _make_snapshot("AAPL", 190.50, int(time.time()))
+        snap.last_quote.bid_price = 189.0
+        snap.last_quote.ask_price = 191.0
+        snap.last_quote.sip_timestamp = int((time.time() - 2) * 1e9)
+        snap.min.close = 188.0
+        snap.min.timestamp = int((time.time() - 2) * 1e3)
+
+        with patch.object(source, "_fetch_snapshots", return_value=[snap]):
+            await source._poll_once()
+
+        update = cache.get("AAPL")
+        assert update is not None
+        assert update.price == 190.50
+
+    async def test_uses_quote_midpoint_when_last_trade_is_stale(self):
+        """Fallback to quote midpoint when last trade is stale."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0, stale_trade_seconds=10.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()
+
+        snap = _make_snapshot("AAPL", 190.50, int(time.time() - 120))
+        snap.last_quote.bid_price = 191.0
+        snap.last_quote.ask_price = 191.4
+        snap.last_quote.sip_timestamp = int((time.time() - 1) * 1e9)
+        snap.min.close = 188.0
+        snap.min.timestamp = int((time.time() - 2) * 1e3)
+
+        with patch.object(source, "_fetch_snapshots", return_value=[snap]):
+            await source._poll_once()
+
+        update = cache.get("AAPL")
+        assert update is not None
+        assert update.price == 191.2
+
+    async def test_uses_minute_close_when_trade_stale_and_quote_unavailable(self):
+        """Fallback to minute close after stale trade and missing quote."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0, stale_trade_seconds=10.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()
+
+        snap = _make_snapshot("AAPL", 190.50, int(time.time() - 120))
+        snap.last_quote.bid_price = None
+        snap.last_quote.ask_price = None
+        snap.last_quote.sip_timestamp = None
+        snap.min.close = 189.75
+        snap.min.timestamp = int((time.time() - 2) * 1e3)
+
+        with patch.object(source, "_fetch_snapshots", return_value=[snap]):
+            await source._poll_once()
+
+        update = cache.get("AAPL")
+        assert update is not None
+        assert update.price == 189.75
 
     async def test_add_ticker(self):
         """Test adding a ticker."""
