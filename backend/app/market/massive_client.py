@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from massive import RESTClient
-from massive.rest.models import SnapshotMarketType
 
 from .cache import PriceCache
 from .interface import MarketDataSource
@@ -99,8 +99,7 @@ class MassiveDataSource(MarketDataSource):
             for snap in snapshots:
                 try:
                     price = snap.last_trade.price
-                    # Massive timestamps are Unix milliseconds → convert to seconds
-                    timestamp = snap.last_trade.timestamp / 1000.0
+                    timestamp = self._extract_snapshot_timestamp(snap)
                     self._cache.update(
                         ticker=snap.ticker,
                         price=price,
@@ -123,6 +122,36 @@ class MassiveDataSource(MarketDataSource):
     def _fetch_snapshots(self) -> list:
         """Synchronous call to the Massive REST API. Runs in a thread."""
         return self._client.get_snapshot_all(
-            market_type=SnapshotMarketType.STOCKS,
+            # Some massive client versions mis-handle enum objects here and
+            # construct a bad URL. Use the literal API value for compatibility.
+            market_type="stocks",
             tickers=self._tickers,
         )
+
+    @staticmethod
+    def _extract_snapshot_timestamp(snap) -> float:
+        """Return snapshot timestamp in Unix seconds across SDK schema variants."""
+        trade = getattr(snap, "last_trade", None)
+
+        raw_ts = getattr(trade, "timestamp", None)
+        if raw_ts is None:
+            raw_ts = getattr(trade, "sip_timestamp", None)
+        if raw_ts is None:
+            raw_ts = getattr(trade, "participant_timestamp", None)
+        if raw_ts is None:
+            raw_ts = getattr(trade, "trf_timestamp", None)
+        if raw_ts is None:
+            raw_ts = getattr(snap, "updated", None)
+
+        if raw_ts is None:
+            return time.time()
+
+        ts = float(raw_ts)
+        # Massive timestamps may be seconds, milliseconds, microseconds, or nanoseconds.
+        if ts > 1e17:  # nanoseconds
+            return ts / 1e9
+        if ts > 1e14:  # microseconds
+            return ts / 1e6
+        if ts > 1e11:  # milliseconds
+            return ts / 1e3
+        return ts

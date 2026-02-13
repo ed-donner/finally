@@ -12,6 +12,7 @@ services:
     environment:
       PORT: "8003"
       APP_MODULE: ${APP_MODULE:-app.main:app}
+      MASSIVE_POLL_INTERVAL_SECONDS: ${MASSIVE_POLL_INTERVAL_SECONDS:-0.5}
     ports:
       - "8003:8003"
     volumes:

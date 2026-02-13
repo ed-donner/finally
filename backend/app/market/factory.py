@@ -24,8 +24,20 @@ def create_market_data_source(price_cache: PriceCache) -> MarketDataSource:
     api_key = os.environ.get("MASSIVE_API_KEY", "").strip()
 
     if api_key:
-        logger.info("Market data source: Massive API (real data)")
-        return MassiveDataSource(api_key=api_key, price_cache=price_cache)
+        raw_interval = os.environ.get("MASSIVE_POLL_INTERVAL_SECONDS", "0.5").strip()
+        try:
+            poll_interval = float(raw_interval)
+        except ValueError:
+            poll_interval = 0.5
+        if poll_interval <= 0:
+            poll_interval = 0.5
+
+        logger.info("Market data source: Massive API (real data, %.3fs poll)", poll_interval)
+        return MassiveDataSource(
+            api_key=api_key,
+            price_cache=price_cache,
+            poll_interval=poll_interval,
+        )
     else:
         logger.info("Market data source: GBM Simulator")
         return SimulatorDataSource(price_cache=price_cache)
