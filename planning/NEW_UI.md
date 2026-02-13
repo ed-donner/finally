@@ -13,6 +13,8 @@ Primary objectives completed:
 - Middle/right layout reworked to fit viewport height and avoid clipping.
 - Right-column overflow issues resolved with a final 3-column top-level grid.
 - Main chart population hardened so selecting watchlist tickers always renders data.
+- Main Chart and Portfolio P&L chart height behavior corrected to fill available panel space.
+- Watchlist mini sparklines restored for all 50 rows with performance-safe rendering.
 - Tests updated and validated in Docker.
 
 ## Final UI Layout
@@ -45,6 +47,19 @@ Final overflow fixes included:
 - `min-w-0` safeguards added on panel wrappers and AI chat form/input elements.
 - Trade Bar switched from fixed-width large-screen grid to compact responsive two-column layout.
 - Main container uses `overflow-x-clip` to prevent accidental horizontal scrollbars from intrinsic child widths.
+
+## Chart Height Fill Fixes (Middle Column)
+
+Issue addressed: Main Chart and Portfolio P&L sparklines were visually squashed and did not fill their widgets.
+
+Fixes:
+
+1. `Sparkline` updated to support explicit height class injection instead of hardcoded `h-8`.
+2. `Panel` extended with `contentClassName` to allow panel-specific flex/min-height control.
+3. `MainChart` and `PnlChart` converted to `flex` + `min-h-0` panel/content layout.
+4. Sparkline containers in both charts now use `flex-1` + `h-full`.
+
+Result: both middle-column charts now use full available vertical space.
 
 ## Watchlist Defaults + Grouping
 
@@ -120,20 +135,19 @@ Fixes:
 
 Result: clicking watchlist symbols always renders chart content.
 
-## Watchlist Mini Charts (Reintroduction Plan)
+## Watchlist Mini Charts (Implemented)
 
-Goal: restore per-ticker mini moving charts in the 5x10 watchlist without degrading UI responsiveness.
+Mini moving charts are now rendered per watchlist row in the 5x10 grid.
 
-Implementation checklist:
+Implementation details:
 
-1. Pass frontend `tickerHistory` into `WatchlistPanel` so each row can access its series.
-2. Render a compact sparkline in each non-empty watchlist row under the ticker label.
-3. Keep series bounded (existing cap: 80 points) and render mini chart with low visual overhead.
-4. Use memoized row rendering to keep update work localized and predictable.
-5. Preserve fixed 10-row-per-column behavior and existing add/remove/select interactions.
-6. Re-run frontend unit tests and rebuild app container for runtime validation.
+1. `tickerHistory` is passed into `WatchlistPanel`.
+2. Each non-empty row renders a compact sparkline under the ticker label.
+3. Displayed row history is capped (32 points rendered) while underlying ticker history remains bounded (80 points).
+4. Row rendering is memoized so updates remain localized.
+5. Existing selection/remove behavior and fixed 10-row-per-column layout are preserved.
 
-Status: implemented on **2026-02-13** with memoized watchlist rows and compact per-row sparklines.
+Result: watchlist feels live again without introducing broad re-render overhead.
 
 ## Massive API Availability Validation
 

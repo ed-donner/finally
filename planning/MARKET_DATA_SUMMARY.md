@@ -1,104 +1,83 @@
-# Market Data Backend — Summary
+# Market Data Backend - Current Summary (2026-02-13)
 
-**Status:** Complete, tested, reviewed, all issues resolved.
+## Status
 
-## What Was Built
+Market data is running in production mode through `MassiveDataSource` with active SSE streaming to the frontend.
 
-A complete market data subsystem in `backend/app/market/` (8 modules, ~500 lines) providing live price simulation and real market data via a unified interface.
+Current behavior is validated end-to-end:
 
-### Architecture
+- `/api/health` reports `market_source: MassiveDataSource`
+- `/api/stream/prices` is live and continuously publishing
+- `/api/watchlist` reflects live cache updates for 50 grouped watchlist symbols
+
+## Active Architecture
 
 ```
-MarketDataSource (ABC)
-├── SimulatorDataSource  →  GBM simulator (default, no API key needed)
-└── MassiveDataSource    →  Polygon.io REST poller (when MASSIVE_API_KEY set)
-        │
-        ▼
-   PriceCache (thread-safe, in-memory)
-        │
-        ├──→ SSE stream endpoint (/api/stream/prices)
-        ├──→ Portfolio valuation
-        └──→ Trade execution
+MassiveDataSource (polling)
+  -> PriceCache (thread-safe in-memory latest state)
+    -> /api/stream/prices (SSE)
+    -> /api/watchlist
+    -> portfolio valuation + trade execution
 ```
 
-### Modules
+Key files:
 
-| File | Purpose |
-|------|---------|
-| `models.py` | `PriceUpdate` — immutable frozen dataclass (ticker, price, previous_price, timestamp, change, direction) |
-| `interface.py` | `MarketDataSource` — abstract base class defining `start/stop/add_ticker/remove_ticker/get_tickers` |
-| `cache.py` | `PriceCache` — thread-safe price store with version counter for SSE change detection |
-| `seed_prices.py` | Realistic seed prices, per-ticker GBM params (drift/volatility), correlation groups |
-| `simulator.py` | `GBMSimulator` (Geometric Brownian Motion with Cholesky-correlated moves) + `SimulatorDataSource` |
-| `massive_client.py` | `MassiveDataSource` — REST polling client for Polygon.io via the `massive` package |
-| `factory.py` | `create_market_data_source()` — selects simulator or Massive based on `MASSIVE_API_KEY` env var |
-| `stream.py` | `create_stream_router()` — FastAPI SSE endpoint factory using version-based change detection |
+- `backend/app/market/massive_client.py`
+- `backend/app/market/cache.py`
+- `backend/app/market/stream.py`
+- `backend/app/market/factory.py`
 
-### Key Design Decisions
+## Price Source Resolution (Implemented)
 
-- **Strategy pattern** — both data sources implement the same ABC; downstream code is source-agnostic
-- **PriceCache as single point of truth** — producers write, consumers read; no direct coupling
-- **GBM with correlated moves** — Cholesky decomposition of sector-based correlation matrix; tech stocks correlate at 0.6, finance at 0.5, cross-sector at 0.3
-- **Random shock events** — ~0.1% chance per tick per ticker of a 2-5% move for visual drama
-- **SSE over WebSockets** — simpler, one-way push, universal browser support
+To reduce static behavior when `last_trade` becomes stale, price selection in `MassiveDataSource` now uses this priority:
 
-## Test Suite
+1. Fresh `last_trade` price (within `MASSIVE_STALE_TRADE_SECONDS`, default `10s`)
+2. `last_quote` midpoint (`(bid + ask) / 2`) with valid quote timestamp
+3. `last_minute.close` with valid minute timestamp
+4. Stale `last_trade` price as last resort if no better source exists
 
-**73 tests, all passing.** 6 test modules in `backend/tests/market/`.
+Additional protections:
 
-| Module | Tests | Coverage |
-|--------|-------|----------|
-| test_models.py | 11 | models.py: 100% |
-| test_cache.py | 13 | cache.py: 100% |
-| test_simulator.py | 17 | simulator.py: 98% |
-| test_simulator_source.py | 10 | (integration tests) |
-| test_factory.py | 7 | factory.py: 100% |
-| test_massive.py | 13 | massive_client.py: 56% (expected — API methods mocked) |
+- Reject invalid / non-positive numeric values
+- Normalize mixed timestamp units (s / ms / us / ns)
+- Preserve same-business-day baseline extraction:
+  - day open -> previous close -> derived from `todays_change`
 
-Overall coverage: 84%.
+## Feed Observations and Interpretation
 
-## Code Review & Fixes Applied
+Live inspection during US market hours showed:
 
-A comprehensive code review identified 7 issues. All were resolved:
+- The stream is functioning and publishing.
+- The watchlist now updates more visibly after fallback pricing changes.
+- Some payloads from the account/feed still carry delayed trade/quote timelines (`timeframe: DELAYED` observed in v3 snapshot responses).
 
-1. **pyproject.toml build config** — added `[tool.hatch.build.targets.wheel] packages = ["app"]`
-2. **Lazy imports removed** — `massive` is a core dependency; imports moved to top level
-3. **SSE return type fixed** — `_generate_events` annotated as `AsyncGenerator[str, None]`
-4. **Public `get_tickers()`** — added to `GBMSimulator` to avoid private attribute access
-5. **Correlation constants cleaned up** — removed unused `DEFAULT_CORR`, consolidated into `CROSS_GROUP_CORR`
-6. **Unused test imports removed** — `pytest`, `math`, `asyncio` cleaned from 4 test files
-7. **Massive test mocks fixed** — `source._client` set in tests, patches target correct names
+Implication:
 
-## Demo
+- Apparent "flatness" can be feed-timeline driven even when app plumbing is healthy.
+- The fallback pipeline improves visible movement, but cannot exceed source freshness/entitlements.
 
-A Rich terminal demo is available at `backend/market_data_demo.py`:
+## Watchlist Universe Validation
+
+All 50 default watchlist symbols were checked against ticker reference metadata and are common stocks (`type=CS`).
+
+Result:
+
+- The default watchlist is not mixing in ETFs/index funds as a cause of missing realtime updates.
+
+## Runtime Configuration
+
+Primary env knobs:
+
+- `MASSIVE_API_KEY` - enables real market source
+- `MASSIVE_POLL_INTERVAL_SECONDS` - polling cadence (currently `0.5` in app runtime)
+- `MASSIVE_STALE_TRADE_SECONDS` - freshness cutoff for preferring `last_trade` (default `10`)
+
+## Operational Notes
+
+After backend market-data changes, rebuild the container image for local runtime parity:
 
 ```bash
-cd backend
-uv run market_data_demo.py
+./scripts/start_mac.sh --build
 ```
 
-Displays a live-updating dashboard with all 10 tickers, sparklines, color-coded direction arrows, and an event log for notable price moves. Runs 60 seconds or until Ctrl+C.
-
-## Usage for Downstream Code
-
-```python
-from app.market import PriceCache, create_market_data_source
-
-# Startup
-cache = PriceCache()
-source = create_market_data_source(cache)  # Reads MASSIVE_API_KEY
-await source.start(["AAPL", "GOOGL", "MSFT", ...])
-
-# Read prices
-update = cache.get("AAPL")          # PriceUpdate or None
-price = cache.get_price("AAPL")     # float or None
-all_prices = cache.get_all()        # dict[str, PriceUpdate]
-
-# Dynamic watchlist
-await source.add_ticker("TSLA")
-await source.remove_ticker("GOOGL")
-
-# Shutdown
-await source.stop()
-```
+This has been repeatedly validated in this environment with successful startup + health checks.
