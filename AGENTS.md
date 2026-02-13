@@ -18,3 +18,11 @@ The key document is PLAN.md included in full here:
 
 - Detailed root-cause analysis and fix details for the Massive API issue are documented in:
   - `planning/MASSIVE_API_FIX.md`
+
+## UI Overhaul Status (2026-02-13)
+
+- Watchlist/UI overhaul is complete and implemented.
+- Watchlist now uses a 5x10 sector grid with new 50-ticker grouped defaults.
+- Same-business-day baseline coloring, layout refinements, and overflow fixes are complete.
+- Full implementation details are documented in:
+  - `planning/NEW_UI.md`

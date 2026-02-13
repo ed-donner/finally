@@ -41,6 +41,26 @@ class TestPriceUpdate:
         update = PriceUpdate(ticker="AAPL", price=100.00, previous_price=0.00, timestamp=1234567890.0)
         assert update.change_percent == 0.0
 
+    def test_day_change_uses_explicit_baseline(self):
+        """Test same-day change calculation with explicit baseline."""
+        update = PriceUpdate(
+            ticker="AAPL",
+            price=110.00,
+            previous_price=109.00,
+            day_baseline_price=100.00,
+            timestamp=1234567890.0,
+        )
+        assert update.day_change == 10.0
+        assert update.day_change_percent == 10.0
+        assert update.day_direction == "up"
+
+    def test_day_change_falls_back_to_previous_price(self):
+        """Test same-day change fallback when baseline is not provided."""
+        update = PriceUpdate(ticker="AAPL", price=101.00, previous_price=100.00, timestamp=1234567890.0)
+        assert update.day_change == 1.0
+        assert update.day_change_percent == 1.0
+        assert update.day_direction == "up"
+
     def test_direction_up(self):
         """Test direction calculation (up)."""
         update = PriceUpdate(ticker="AAPL", price=191.00, previous_price=190.00, timestamp=1234567890.0)
@@ -64,10 +84,14 @@ class TestPriceUpdate:
         assert result["ticker"] == "AAPL"
         assert result["price"] == 190.50
         assert result["previous_price"] == 190.00
+        assert result["day_baseline_price"] == 190.00
         assert result["timestamp"] == 1234567890.0
         assert result["change"] == 0.50
         assert result["change_percent"] == 0.2632  # (0.50 / 190.00) * 100
         assert result["direction"] == "up"
+        assert result["day_change"] == 0.50
+        assert result["day_change_percent"] == 0.2632
+        assert result["day_direction"] == "up"
 
     def test_immutability(self):
         """Test that PriceUpdate is immutable."""

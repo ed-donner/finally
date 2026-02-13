@@ -11,7 +11,7 @@ export const PnlChart = ({ data }: { data: PortfolioSnapshot[] }) => {
   return (
     <Panel title="Portfolio P&L" className="h-full">
       <div className="rounded border border-terminal-border bg-terminal-bg/40 p-3">
-        <Sparkline values={values.length > 1 ? values : [start, latest]} stroke="#ecad0a" height={140} />
+        <Sparkline values={values.length > 1 ? values : [start, latest]} stroke="#ecad0a" height={110} />
         <div className="mt-2 flex items-center justify-between text-xs text-terminal-dim">
           <span>Start {money(start)}</span>
           <span className={latest - start >= 0 ? 'text-terminal-positive' : 'text-terminal-negative'}>{money(latest - start)}</span>

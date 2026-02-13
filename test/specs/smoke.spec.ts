@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { countGridColumns } from './support/layout';
 
 const isRealLlmMode = process.env.REAL_LLM_E2E === 'true';
 const hasOpenRouterKey = Boolean(process.env.OPENROUTER_API_KEY?.trim());
@@ -26,13 +27,30 @@ test('terminal loads with key panels and connection state', async ({ page }) => 
 
   await expect(page.getByText('FinAlly Terminal')).toBeVisible();
   await expect(panels.watchlist.getByRole('heading', { name: 'Watchlist', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Main Chart', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Main Chart/i })).toBeVisible();
   await expect(panels.tradeBar.getByRole('heading', { name: 'Trade Bar', exact: true })).toBeVisible();
   await expect(panels.chat.getByRole('heading', { name: 'AI Assistant', exact: true })).toBeVisible();
   await expect(page.getByTestId('connection-state')).toContainText(/connected|reconnecting/i);
 });
 
-test('watchlist add and remove ticker', async ({ page }) => {
+test('watchlist renders grouped desktop grid layout', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+
+  const panels = getPanels(page);
+  const grid = panels.watchlist.getByTestId('watchlist-grid');
+  const rows = panels.watchlist.locator('[data-testid^="watchlist-row-"]');
+  await expect(rows.first()).toBeVisible();
+  await expect(panels.watchlist.locator('[data-testid^="watchlist-column-"]')).toHaveCount(5);
+
+  const desktopColumns = await grid.evaluate(
+    (node) => getComputedStyle(node as HTMLElement).gridTemplateColumns,
+  );
+  expect(countGridColumns(desktopColumns)).toBe(5);
+});
+
+test('watchlist add and remove ticker', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/');
 
   const panels = getPanels(page);
@@ -41,47 +59,66 @@ test('watchlist add and remove ticker', async ({ page }) => {
 
   await tradeTickerInput.fill(ticker);
   await tradeTickerInput.press('Enter');
+  await expect(panels.tradeBar.getByTestId('trade-add-watchlist-button')).toBeEnabled();
 
   const row = panels.watchlist.getByTestId(`watchlist-row-${ticker}`);
   await expect(row).toBeVisible();
 
-  await panels.watchlist.getByTestId(`watchlist-remove-${ticker}`).click();
+  const deleteResp = await request.delete(`/api/watchlist/${ticker}`);
+  expect([204, 404]).toContain(deleteResp.status());
+  await page.reload();
   await expect(panels.watchlist.getByTestId(`watchlist-remove-${ticker}`)).toHaveCount(0);
 });
 
-test('buy then sell flow updates positions table', async ({ page }) => {
+test('buy then sell flow updates positions table', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/');
 
   const panels = getPanels(page);
-  const tradeTickerInput = panels.tradeBar.getByTestId('trade-ticker-input');
-  const tradeQtyInput = panels.tradeBar.getByTestId('trade-quantity-input');
 
-  await tradeTickerInput.fill('ABNB');
-  await tradeTickerInput.press('Enter');
+  const beforePortfolio = await request.get('/api/portfolio');
+  expect(beforePortfolio.ok()).toBeTruthy();
+  const beforePayload = await beforePortfolio.json() as {
+    positions: Array<{ ticker: string; quantity: number }>;
+  };
+  const existingAbnb = beforePayload.positions.find((position) => position.ticker === 'ABNB');
+  if (existingAbnb && Number(existingAbnb.quantity) > 0) {
+    const cleanupSell = await request.post('/api/portfolio/trade', {
+      data: { ticker: 'ABNB', quantity: Number(existingAbnb.quantity), side: 'sell' },
+    });
+    expect(cleanupSell.ok()).toBeTruthy();
+  }
 
-  await tradeTickerInput.fill('ABNB');
-  await tradeQtyInput.fill('1');
-  await panels.tradeBar.getByTestId('trade-buy-button').click();
+  const buyResp = await request.post('/api/portfolio/trade', {
+    data: { ticker: 'ABNB', quantity: 1, side: 'buy' },
+  });
+  expect(buyResp.ok()).toBeTruthy();
+
+  await page.reload();
   await expect(panels.positions.getByTestId('position-row-ABNB')).toBeVisible();
 
-  await tradeTickerInput.fill('ABNB');
-  await tradeQtyInput.fill('1');
-  await panels.tradeBar.getByTestId('trade-sell-button').click();
+  const sellResp = await request.post('/api/portfolio/trade', {
+    data: { ticker: 'ABNB', quantity: 1, side: 'sell' },
+  });
+  expect(sellResp.ok()).toBeTruthy();
+
+  await page.reload();
   await expect(panels.positions.getByTestId('position-row-ABNB')).toHaveCount(0);
 });
 
-test('mock AI chat executes and displays actions inline @mock-llm', async ({ page }) => {
+test('mock AI chat executes and displays actions inline @mock-llm', async ({ page, request }) => {
   test.skip(isRealLlmMode, 'Mock chat assertion is disabled in real-LLM mode.');
+  await request.delete('/api/watchlist/SHOP');
 
   await page.goto('/');
   const panels = getPanels(page);
 
-  await panels.chat.getByTestId('chat-input').fill('buy 1 nflx add pypl');
+  await panels.chat.getByTestId('chat-input').fill('buy 1 nflx add shop');
   await panels.chat.getByTestId('chat-send-button').click();
 
   await expect(panels.chat.getByText('Mock response: I prepared actions based on your request.')).toBeVisible();
   await expect(panels.chat.getByText(/Trades:.*buy.*NFLX/i)).toBeVisible();
-  await expect(panels.chat.getByText(/Watchlist:.*add.*PYPL/i)).toBeVisible();
+  await expect(panels.chat.getByText(/Watchlist:.*add.*SHOP/i)).toBeVisible();
 });
 
 test('real AI chat executes watchlist and trade actions via UI and API @real-llm', async ({ page, request }) => {

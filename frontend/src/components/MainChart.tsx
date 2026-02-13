@@ -18,9 +18,9 @@ export const MainChart = ({ ticker, series }: MainChartProps) => {
       rightSlot={<p className={`text-xs ${delta >= 0 ? 'text-terminal-positive' : 'text-terminal-negative'}`}>{money(delta)}</p>}
       className="h-full"
     >
-      <div className="rounded border border-terminal-border bg-terminal-bg/40 p-3">
-        <Sparkline values={series} stroke="#209dd7" height={190} />
-        <div className="mt-2 flex items-center justify-between text-xs text-terminal-dim">
+      <div className="h-full rounded border border-terminal-border bg-terminal-bg/40 p-3">
+        <Sparkline values={series} stroke="#209dd7" height={150} />
+        <div className="mt-1.5 flex items-center justify-between text-xs text-terminal-dim">
           <span>Session open</span>
           <span className="text-terminal-text">{money(latest)}</span>
         </div>

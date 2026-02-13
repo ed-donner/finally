@@ -11,7 +11,7 @@ from uuid import uuid4
 
 DEFAULT_USER_ID = "default"
 DEFAULT_CASH_BALANCE = 10000.0
-DEFAULT_WATCHLIST = [
+LEGACY_DEFAULT_WATCHLIST = [
     "AAPL",
     "GOOGL",
     "MSFT",
@@ -23,6 +23,39 @@ DEFAULT_WATCHLIST = [
     "V",
     "NFLX",
 ]
+
+DEFAULT_WATCHLIST_GROUPS = [
+    {
+        "key": "tech",
+        "label": "Tech",
+        "tickers": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "ORCL", "CRM", "ADBE", "INTC"],
+    },
+    {
+        "key": "financials",
+        "label": "Financials",
+        "tickers": ["JPM", "BAC", "WFC", "C", "GS", "MS", "V", "MA", "AXP", "BLK"],
+    },
+    {
+        "key": "healthcare",
+        "label": "Healthcare",
+        "tickers": ["JNJ", "PFE", "MRK", "UNH", "ABBV", "LLY", "TMO", "ABT", "DHR", "BMY"],
+    },
+    {
+        "key": "consumer",
+        "label": "Consumer",
+        "tickers": ["WMT", "COST", "HD", "MCD", "NKE", "SBUX", "KO", "PEP", "DIS", "NFLX"],
+    },
+    {
+        "key": "industrials-energy",
+        "label": "Industrials & Energy",
+        "tickers": ["XOM", "CVX", "CAT", "DE", "BA", "GE", "RTX", "UPS", "UNP", "HON"],
+    },
+]
+
+DEFAULT_WATCHLIST = [ticker for group in DEFAULT_WATCHLIST_GROUPS for ticker in group["tickers"]]
+CUSTOM_GROUP_KEY = "custom"
+CUSTOM_GROUP_LABEL = "Custom"
+CUSTOM_GROUP_ORDER = 99
 
 _init_lock = Lock()
 _initialized_paths: set[Path] = set()
@@ -83,11 +116,16 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             ticker TEXT NOT NULL,
+            group_key TEXT,
+            group_label TEXT,
+            group_order INTEGER NOT NULL DEFAULT 999,
+            item_order INTEGER NOT NULL DEFAULT 999,
             added_at TEXT NOT NULL,
             UNIQUE(user_id, ticker)
         )
         """
     )
+    _ensure_watchlist_columns(conn)
 
     conn.execute(
         """
@@ -153,16 +191,62 @@ def _seed_defaults(conn: sqlite3.Connection) -> None:
             (DEFAULT_USER_ID, DEFAULT_CASH_BALANCE, now_iso()),
         )
 
-    watchlist_count = conn.execute(
-        "SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ?",
+    rows = conn.execute(
+        "SELECT ticker, group_key FROM watchlist WHERE user_id = ?",
         (DEFAULT_USER_ID,),
-    ).fetchone()["count"]
-    if watchlist_count == 0:
-        for ticker in DEFAULT_WATCHLIST:
+    ).fetchall()
+    current_tickers = {row["ticker"] for row in rows}
+    if not rows:
+        _insert_default_watchlist(conn)
+    elif _is_unchanged_legacy_default_watchlist(current_tickers):
+        conn.execute("DELETE FROM watchlist WHERE user_id = ?", (DEFAULT_USER_ID,))
+        _insert_default_watchlist(conn)
+    elif _is_ungrouped_legacy_watchlist(rows):
+        conn.execute("DELETE FROM watchlist WHERE user_id = ?", (DEFAULT_USER_ID,))
+        _insert_default_watchlist(conn)
+
+
+def _ensure_watchlist_columns(conn: sqlite3.Connection) -> None:
+    existing_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(watchlist)").fetchall()
+    }
+    if "group_key" not in existing_columns:
+        conn.execute("ALTER TABLE watchlist ADD COLUMN group_key TEXT")
+    if "group_label" not in existing_columns:
+        conn.execute("ALTER TABLE watchlist ADD COLUMN group_label TEXT")
+    if "group_order" not in existing_columns:
+        conn.execute("ALTER TABLE watchlist ADD COLUMN group_order INTEGER NOT NULL DEFAULT 999")
+    if "item_order" not in existing_columns:
+        conn.execute("ALTER TABLE watchlist ADD COLUMN item_order INTEGER NOT NULL DEFAULT 999")
+
+
+def _insert_default_watchlist(conn: sqlite3.Connection) -> None:
+    added_at = now_iso()
+    for group_index, group in enumerate(DEFAULT_WATCHLIST_GROUPS):
+        for item_index, ticker in enumerate(group["tickers"]):
             conn.execute(
-                "INSERT INTO watchlist (id, user_id, ticker, added_at) VALUES (?, ?, ?, ?)",
-                (str(uuid4()), DEFAULT_USER_ID, ticker, now_iso()),
+                "INSERT INTO watchlist (id, user_id, ticker, group_key, group_label, group_order, item_order, added_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    str(uuid4()),
+                    DEFAULT_USER_ID,
+                    ticker,
+                    group["key"],
+                    group["label"],
+                    group_index,
+                    item_index,
+                    added_at,
+                ),
             )
+
+
+def _is_unchanged_legacy_default_watchlist(current_tickers: set[str]) -> bool:
+    legacy_tickers = set(LEGACY_DEFAULT_WATCHLIST)
+    return current_tickers == legacy_tickers
+
+
+def _is_ungrouped_legacy_watchlist(rows: list[sqlite3.Row]) -> bool:
+    return bool(rows) and all(not row["group_key"] for row in rows)
 
 
 def encode_actions(actions: dict) -> str:

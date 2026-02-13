@@ -100,13 +100,15 @@ class MassiveDataSource(MarketDataSource):
                 try:
                     price = snap.last_trade.price
                     timestamp = self._extract_snapshot_timestamp(snap)
+                    day_baseline = self._extract_day_baseline(snap, price)
                     self._cache.update(
                         ticker=snap.ticker,
                         price=price,
                         timestamp=timestamp,
+                        day_baseline_price=day_baseline,
                     )
                     processed += 1
-                except (AttributeError, TypeError) as e:
+                except (AttributeError, TypeError, ValueError) as e:
                     logger.warning(
                         "Skipping snapshot for %s: %s",
                         getattr(snap, "ticker", "???"),
@@ -155,3 +157,28 @@ class MassiveDataSource(MarketDataSource):
         if ts > 1e11:  # milliseconds
             return ts / 1e3
         return ts
+
+    @staticmethod
+    def _extract_day_baseline(snap, price: float) -> float | None:
+        """Prefer current day open; fallback to previous close or derived value."""
+        day = getattr(snap, "day", None)
+        day_open = getattr(day, "open", None)
+        if day_open is not None:
+            day_open = float(day_open)
+            if day_open > 0:
+                return day_open
+
+        prev_day = getattr(snap, "prev_day", None)
+        prev_close = getattr(prev_day, "close", None)
+        if prev_close is not None:
+            prev_close = float(prev_close)
+            if prev_close > 0:
+                return prev_close
+
+        todays_change = getattr(snap, "todays_change", None)
+        if todays_change is not None:
+            baseline = float(price) - float(todays_change)
+            if baseline > 0:
+                return baseline
+
+        return None

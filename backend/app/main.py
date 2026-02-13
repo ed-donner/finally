@@ -16,7 +16,17 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .db import DEFAULT_USER_ID, encode_actions, ensure_db_initialized, get_connection, get_db_path, now_iso
+from .db import (
+    CUSTOM_GROUP_KEY,
+    CUSTOM_GROUP_LABEL,
+    CUSTOM_GROUP_ORDER,
+    DEFAULT_USER_ID,
+    encode_actions,
+    ensure_db_initialized,
+    get_connection,
+    get_db_path,
+    now_iso,
+)
 from .llm import generate_chat_response
 from .market import PriceCache, create_market_data_source, create_stream_router
 from .market.seed_prices import SEED_PRICES
@@ -54,10 +64,35 @@ def _ticker(value: str) -> str:
 
 def _fetch_watchlist_tickers(conn: sqlite3.Connection) -> list[str]:
     rows = conn.execute(
-        "SELECT ticker FROM watchlist WHERE user_id = ? ORDER BY ticker",
+        "SELECT ticker FROM watchlist WHERE user_id = ? ORDER BY group_order, item_order, ticker",
         (DEFAULT_USER_ID,),
     ).fetchall()
     return [row["ticker"] for row in rows]
+
+
+def _next_custom_item_order(conn: sqlite3.Connection) -> int:
+    row = conn.execute(
+        "SELECT COALESCE(MAX(item_order), -1) + 1 AS next_order FROM watchlist WHERE user_id = ? AND group_key = ?",
+        (DEFAULT_USER_ID, CUSTOM_GROUP_KEY),
+    ).fetchone()
+    return int(row["next_order"])
+
+
+def _insert_watchlist_ticker(conn: sqlite3.Connection, ticker: str) -> None:
+    conn.execute(
+        "INSERT INTO watchlist (id, user_id, ticker, group_key, group_label, group_order, item_order, added_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            str(uuid4()),
+            DEFAULT_USER_ID,
+            ticker,
+            CUSTOM_GROUP_KEY,
+            CUSTOM_GROUP_LABEL,
+            CUSTOM_GROUP_ORDER,
+            _next_custom_item_order(conn),
+            now_iso(),
+        ),
+    )
 
 
 def _get_profile(conn: sqlite3.Connection) -> sqlite3.Row:
@@ -287,7 +322,8 @@ def create_app() -> FastAPI:
         ensure_db_initialized()
         with get_connection() as conn:
             rows = conn.execute(
-                "SELECT ticker, added_at FROM watchlist WHERE user_id = ? ORDER BY ticker",
+                "SELECT ticker, group_key, group_label, group_order, item_order, added_at "
+                "FROM watchlist WHERE user_id = ? ORDER BY group_order, item_order, ticker",
                 (DEFAULT_USER_ID,),
             ).fetchall()
 
@@ -295,14 +331,23 @@ def create_app() -> FastAPI:
         for row in rows:
             ticker = row["ticker"]
             update = state.price_cache.get(ticker)
+            fallback_price = SEED_PRICES.get(ticker, 100.0)
             items.append(
                 {
                     "ticker": ticker,
                     "added_at": row["added_at"],
-                    "price": update.price if update else SEED_PRICES.get(ticker),
-                    "previous_price": update.previous_price if update else None,
-                    "direction": update.direction if update else "flat",
-                    "change_percent": update.change_percent if update else 0.0,
+                    "price": update.price if update else fallback_price,
+                    "previous_price": update.previous_price if update else fallback_price,
+                    "day_baseline_price": update.day_baseline_price if update else fallback_price,
+                    "direction": update.day_direction if update else "flat",
+                    "change_percent": update.day_change_percent if update else 0.0,
+                    "intraday_change_percent": update.change_percent if update else 0.0,
+                    "group": {
+                        "key": row["group_key"] or CUSTOM_GROUP_KEY,
+                        "label": row["group_label"] or CUSTOM_GROUP_LABEL,
+                        "order": row["group_order"] if row["group_order"] is not None else CUSTOM_GROUP_ORDER,
+                        "item_order": row["item_order"] if row["item_order"] is not None else 0,
+                    },
                 }
             )
 
@@ -320,10 +365,7 @@ def create_app() -> FastAPI:
             if exists:
                 raise HTTPException(status_code=409, detail="Ticker already in watchlist")
 
-            conn.execute(
-                "INSERT INTO watchlist (id, user_id, ticker, added_at) VALUES (?, ?, ?, ?)",
-                (str(uuid4()), DEFAULT_USER_ID, ticker, now_iso()),
-            )
+            _insert_watchlist_ticker(conn, ticker)
             conn.commit()
 
         if state.market_source:
@@ -447,10 +489,7 @@ def create_app() -> FastAPI:
                 action = change["action"]
                 try:
                     if action == "add":
-                        conn.execute(
-                            "INSERT INTO watchlist (id, user_id, ticker, added_at) VALUES (?, ?, ?, ?)",
-                            (str(uuid4()), DEFAULT_USER_ID, ticker, now_iso()),
-                        )
+                        _insert_watchlist_ticker(conn, ticker)
                         if state.market_source:
                             await state.market_source.add_ticker(ticker)
                     else:

@@ -42,14 +42,15 @@ export const TradeBar = ({ defaultTicker, onTrade, onAddTicker }: TradeBarProps)
 
   return (
     <Panel title="Trade Bar" className="h-full" testId="panel-trade-bar">
-      <form data-testid="trade-form" onSubmit={addTicker} className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_120px_auto_auto_auto]">
+      <form data-testid="trade-form" onSubmit={addTicker} className="grid grid-cols-2 gap-2">
         <input
           data-testid="trade-ticker-input"
           aria-label="Trade ticker"
           value={ticker}
           onChange={(event) => setTicker(event.target.value.toUpperCase())}
           placeholder="Ticker"
-          className="rounded border border-terminal-border bg-terminal-bg px-3 py-2 text-sm text-terminal-text outline-none focus:border-terminal-blue"
+          maxLength={5}
+          className="min-w-0 rounded border border-terminal-border bg-terminal-bg px-2 py-2 text-sm text-terminal-text outline-none focus:border-terminal-blue"
         />
         <input
           data-testid="trade-quantity-input"
@@ -60,14 +61,14 @@ export const TradeBar = ({ defaultTicker, onTrade, onAddTicker }: TradeBarProps)
           min="0"
           step="0.01"
           placeholder="Quantity"
-          className="rounded border border-terminal-border bg-terminal-bg px-3 py-2 text-sm text-terminal-text outline-none focus:border-terminal-blue"
+          className="min-w-0 rounded border border-terminal-border bg-terminal-bg px-2 py-2 text-sm text-terminal-text outline-none focus:border-terminal-blue"
         />
         <button
           data-testid="trade-buy-button"
           type="button"
           onClick={() => void runTrade('buy')}
           disabled={isBusy}
-          className="rounded bg-terminal-positive px-4 py-2 text-sm font-semibold text-terminal-bg disabled:opacity-60"
+          className="min-w-0 rounded bg-terminal-positive px-2 py-2 text-sm font-semibold text-terminal-bg disabled:opacity-60"
         >
           Buy
         </button>
@@ -76,7 +77,7 @@ export const TradeBar = ({ defaultTicker, onTrade, onAddTicker }: TradeBarProps)
           type="button"
           onClick={() => void runTrade('sell')}
           disabled={isBusy}
-          className="rounded bg-terminal-negative px-4 py-2 text-sm font-semibold text-terminal-bg disabled:opacity-60"
+          className="min-w-0 rounded bg-terminal-negative px-2 py-2 text-sm font-semibold text-terminal-bg disabled:opacity-60"
         >
           Sell
         </button>
@@ -84,9 +85,9 @@ export const TradeBar = ({ defaultTicker, onTrade, onAddTicker }: TradeBarProps)
           data-testid="trade-add-watchlist-button"
           type="submit"
           disabled={isBusy}
-          className="rounded bg-terminal-violet px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          className="col-span-2 min-w-0 rounded bg-terminal-violet px-2 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
-          Add To Watchlist
+          Watch
         </button>
       </form>
     </Panel>

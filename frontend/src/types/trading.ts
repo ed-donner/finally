@@ -8,15 +8,22 @@ export interface PriceUpdate {
   timestamp: number;
   change: number;
   direction: Direction;
+  change_percent?: number;
+  previous_close?: number;
+  day_baseline_price?: number;
+  day_change?: number;
+  day_change_percent?: number;
 }
 
 export interface WatchlistItem {
   ticker: string;
   price: number;
   previousPrice: number;
+  dayBaselinePrice: number;
   changePercent: number;
   direction: Direction;
   flash: Direction;
+  group: string;
 }
 
 export interface Position {

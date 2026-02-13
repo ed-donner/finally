@@ -15,6 +15,11 @@ def _make_snapshot(ticker: str, price: float, timestamp_ms: int) -> MagicMock:
     snap.last_trade = MagicMock()
     snap.last_trade.price = price
     snap.last_trade.timestamp = timestamp_ms
+    snap.day = MagicMock()
+    snap.day.open = price - 1.0
+    snap.prev_day = MagicMock()
+    snap.prev_day.close = price - 2.0
+    snap.todays_change = 1.0
     return snap
 
 
@@ -102,6 +107,62 @@ class TestMassiveDataSource:
         update = cache.get("AAPL")
         assert update is not None
         assert update.timestamp == 1707580800.0  # Converted to seconds
+
+    async def test_day_baseline_prefers_day_open(self):
+        """Test day baseline uses snapshot day.open when available."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()
+
+        snap = _make_snapshot("AAPL", 190.50, 1707580800000)
+        snap.day.open = 188.0
+        snap.prev_day.close = 187.5
+
+        with patch.object(source, "_fetch_snapshots", return_value=[snap]):
+            await source._poll_once()
+
+        update = cache.get("AAPL")
+        assert update is not None
+        assert update.day_baseline_price == 188.0
+
+    async def test_day_baseline_falls_back_to_prev_close(self):
+        """Test day baseline falls back to previous close when day open is missing."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()
+
+        snap = _make_snapshot("AAPL", 190.50, 1707580800000)
+        snap.day.open = None
+        snap.prev_day.close = 187.5
+        snap.todays_change = None
+
+        with patch.object(source, "_fetch_snapshots", return_value=[snap]):
+            await source._poll_once()
+
+        update = cache.get("AAPL")
+        assert update is not None
+        assert update.day_baseline_price == 187.5
+
+    async def test_day_baseline_falls_back_to_derived_todays_change(self):
+        """Test derived baseline when day open and previous close are unavailable."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()
+
+        snap = _make_snapshot("AAPL", 190.50, 1707580800000)
+        snap.day.open = None
+        snap.prev_day.close = None
+        snap.todays_change = 1.5
+
+        with patch.object(source, "_fetch_snapshots", return_value=[snap]):
+            await source._poll_once()
+
+        update = cache.get("AAPL")
+        assert update is not None
+        assert update.day_baseline_price == 189.0
 
     async def test_add_ticker(self):
         """Test adding a ticker."""

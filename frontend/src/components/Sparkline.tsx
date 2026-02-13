@@ -5,18 +5,19 @@ interface SparklineProps {
 }
 
 export const Sparkline = ({ values, stroke = '#209dd7', height = 34 }: SparklineProps) => {
-  if (values.length < 2) {
+  if (values.length === 0) {
     return <div className="h-8 w-full rounded bg-terminal-panelAlt/40" />;
   }
+  const normalizedValues = values.length === 1 ? [values[0], values[0]] : values;
 
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  const min = Math.min(...normalizedValues);
+  const max = Math.max(...normalizedValues);
   const range = Math.max(max - min, 0.0001);
   const width = 180;
 
-  const points = values
+  const points = normalizedValues
     .map((value, index) => {
-      const x = (index / (values.length - 1)) * width;
+      const x = (index / (normalizedValues.length - 1)) * width;
       const y = height - ((value - min) / range) * height;
       return `${x},${y}`;
     })

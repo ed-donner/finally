@@ -20,7 +20,13 @@ class PriceCache:
         self._lock = Lock()
         self._version: int = 0  # Monotonically increasing; bumped on every update
 
-    def update(self, ticker: str, price: float, timestamp: float | None = None) -> PriceUpdate:
+    def update(
+        self,
+        ticker: str,
+        price: float,
+        timestamp: float | None = None,
+        day_baseline_price: float | None = None,
+    ) -> PriceUpdate:
         """Record a new price for a ticker. Returns the created PriceUpdate.
 
         Automatically computes direction and change from the previous price.
@@ -31,10 +37,19 @@ class PriceCache:
             prev = self._prices.get(ticker)
             previous_price = prev.price if prev else price
 
+            resolved_baseline = None
+            if day_baseline_price is not None and day_baseline_price > 0:
+                resolved_baseline = round(day_baseline_price, 2)
+            elif prev and prev.day_baseline_price is not None and prev.day_baseline_price > 0:
+                resolved_baseline = round(prev.day_baseline_price, 2)
+            elif previous_price > 0:
+                resolved_baseline = round(previous_price, 2)
+
             update = PriceUpdate(
                 ticker=ticker,
                 price=round(price, 2),
                 previous_price=round(previous_price, 2),
+                day_baseline_price=resolved_baseline,
                 timestamp=ts,
             )
             self._prices[ticker] = update

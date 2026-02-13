@@ -7,7 +7,7 @@ export const Heatmap = ({ positions }: { positions: Position[] }) => {
 
   return (
     <Panel title="Position Heatmap" className="h-full">
-      <div className="grid h-[230px] grid-cols-2 gap-2 overflow-hidden rounded border border-terminal-border bg-terminal-panelAlt/30 p-2">
+      <div className="grid h-full min-h-[150px] grid-cols-2 gap-2 overflow-auto rounded border border-terminal-border bg-terminal-panelAlt/30 p-2">
         {positions.length === 0 && <p className="col-span-2 text-sm text-terminal-dim">No open positions.</p>}
         {positions.map((position) => {
           const value = position.current_price * position.quantity;

@@ -20,6 +20,7 @@ class TestPriceCache:
         update = cache.update("AAPL", 190.50)
         assert update.direction == "flat"
         assert update.previous_price == 190.50
+        assert update.day_baseline_price == 190.50
 
     def test_direction_up(self):
         """Test price update with upward direction."""
@@ -101,3 +102,18 @@ class TestPriceCache:
         cache = PriceCache()
         update = cache.update("AAPL", 190.12345)
         assert update.price == 190.12
+
+    def test_day_baseline_is_set_from_update_argument(self):
+        """Test explicit day baseline assignment."""
+        cache = PriceCache()
+        update = cache.update("AAPL", 190.50, day_baseline_price=188.0)
+        assert update.day_baseline_price == 188.0
+        assert update.day_change_percent == 1.3298
+
+    def test_day_baseline_persists_between_updates(self):
+        """Test baseline persistence when later updates omit it."""
+        cache = PriceCache()
+        cache.update("AAPL", 190.00, day_baseline_price=185.00)
+        update = cache.update("AAPL", 191.00)
+        assert update.day_baseline_price == 185.00
+        assert update.day_change == 6.00

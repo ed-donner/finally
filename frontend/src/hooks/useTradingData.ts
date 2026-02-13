@@ -28,6 +28,23 @@ const appendSeries = (series: number[], next: number): number[] => {
   return merged.slice(merged.length - maxSparklinePoints);
 };
 
+const resolveIncomingDayBaseline = (incoming: PriceUpdate, existingBaseline: number, fallbackPrevious: number): number => {
+  const baseline = incoming.day_baseline_price ?? incoming.previous_close ?? existingBaseline;
+  if (baseline && baseline > 0) return baseline;
+  if (fallbackPrevious > 0) return fallbackPrevious;
+  return incoming.price;
+};
+
+const resolveIncomingDayChangePercent = (incoming: PriceUpdate, dayBaselinePrice: number, existingPercent: number): number => {
+  if (typeof incoming.day_change_percent === 'number' && Number.isFinite(incoming.day_change_percent)) {
+    return incoming.day_change_percent;
+  }
+  if (dayBaselinePrice > 0) {
+    return ((incoming.price - dayBaselinePrice) / dayBaselinePrice) * 100;
+  }
+  return existingPercent;
+};
+
 export const useTradingData = () => {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string>('AAPL');
@@ -61,9 +78,17 @@ export const useTradingData = () => {
 
     const bootstrapSeries: Record<string, number[]> = {};
     for (const row of watchlistRows) {
-      bootstrapSeries[row.ticker] = row.price > 0 ? [row.price] : [];
+      const bootstrapPoint = row.price || row.dayBaselinePrice || row.previousPrice || 0;
+      bootstrapSeries[row.ticker] = bootstrapPoint > 0 ? [bootstrapPoint] : [];
     }
-    setTickerHistory((existing) => ({ ...bootstrapSeries, ...existing }));
+    setTickerHistory((existing) => {
+      const merged: Record<string, number[]> = { ...existing };
+      for (const [ticker, bootstrap] of Object.entries(bootstrapSeries)) {
+        const current = existing[ticker] ?? [];
+        merged[ticker] = current.length > 0 ? current : bootstrap;
+      }
+      return merged;
+    });
     if (!watchlistRows.find((row) => row.ticker === selectedTicker) && watchlistRows[0]) {
       setSelectedTicker(watchlistRows[0].ticker);
     }
@@ -73,18 +98,20 @@ export const useTradingData = () => {
     void refreshStaticData();
   }, [refreshStaticData]);
 
-  const onPriceBatch = useCallback((batch: Record<string, { price: number; previous_price: number; direction: 'up' | 'down' | 'flat' }>) => {
+  const onPriceBatch = useCallback((batch: Record<string, PriceUpdate>) => {
     setWatchlist((current) =>
       current.map((item) => {
         const incoming = batch[item.ticker];
         if (!incoming) return item;
 
         const prior = incoming.previous_price || item.price || incoming.price;
-        const changePercent = prior === 0 ? 0 : ((incoming.price - prior) / prior) * 100;
+        const dayBaselinePrice = resolveIncomingDayBaseline(incoming, item.dayBaselinePrice, prior);
+        const changePercent = resolveIncomingDayChangePercent(incoming, dayBaselinePrice, item.changePercent);
         return {
           ...item,
           previousPrice: prior,
           price: incoming.price,
+          dayBaselinePrice,
           direction: incoming.direction,
           flash: incoming.direction,
           changePercent,
@@ -126,7 +153,39 @@ export const useTradingData = () => {
     });
   }, []);
 
-  const selectedSeries = useMemo(() => tickerHistory[selectedTicker] ?? [], [selectedTicker, tickerHistory]);
+  const selectedSeries = useMemo(() => {
+    const currentSeries = tickerHistory[selectedTicker] ?? [];
+    if (currentSeries.length > 0) return currentSeries;
+
+    const selectedWatchlistRow = watchlist.find((item) => item.ticker === selectedTicker);
+    if (!selectedWatchlistRow) return currentSeries;
+
+    const fallbackPrice =
+      selectedWatchlistRow.price
+      || selectedWatchlistRow.dayBaselinePrice
+      || selectedWatchlistRow.previousPrice;
+
+    return fallbackPrice > 0 ? [fallbackPrice] : currentSeries;
+  }, [selectedTicker, tickerHistory, watchlist]);
+
+  useEffect(() => {
+    const selectedWatchlistRow = watchlist.find((item) => item.ticker === selectedTicker);
+    if (!selectedWatchlistRow) return;
+
+    setTickerHistory((current) => {
+      const existingSeries = current[selectedTicker] ?? [];
+      if (existingSeries.length > 0) return current;
+
+      const fallbackPoint =
+        selectedWatchlistRow.price
+        || selectedWatchlistRow.dayBaselinePrice
+        || selectedWatchlistRow.previousPrice
+        || 0;
+
+      if (fallbackPoint <= 0) return current;
+      return { ...current, [selectedTicker]: [fallbackPoint] };
+    });
+  }, [selectedTicker, watchlist]);
 
   const trade = useCallback(
     async (payload: TradeRequest) => {
@@ -200,17 +259,8 @@ export const useTradingData = () => {
     [refreshStaticData],
   );
 
-  const liveWatchlist = useMemo(
-    () =>
-      watchlist.map((item) => {
-        if (item.flash === 'flat') return item;
-        return item;
-      }),
-    [watchlist],
-  );
-
   return {
-    watchlist: liveWatchlist,
+    watchlist,
     selectedTicker,
     setSelectedTicker,
     portfolio,

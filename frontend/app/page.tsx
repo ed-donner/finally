@@ -39,14 +39,13 @@ export default function HomePage() {
   }, [setConnectionState, streamState]);
 
   return (
-    <main className="min-h-screen bg-transparent">
+    <main className="min-h-screen overflow-x-clip bg-transparent">
       <Header totalValue={portfolio.total_value} cash={portfolio.cash_balance} connectionState={streamState} />
 
-      <div className="mx-auto grid max-w-[1680px] grid-cols-1 gap-3 p-3 xl:grid-cols-[320px_1fr_360px]">
-        <div className="xl:min-h-[calc(100vh-98px)]">
+      <div className="grid w-full grid-cols-1 gap-3 p-3 xl:h-[calc(100vh-98px)] xl:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)_minmax(240px,280px)]">
+        <div className="min-h-0 min-w-0 xl:h-full">
           <WatchlistPanel
             watchlist={watchlist}
-            sparklineByTicker={tickerHistory}
             selectedTicker={selectedTicker}
             onSelectTicker={setSelectedTicker}
             onRemoveTicker={(ticker) => {
@@ -55,27 +54,27 @@ export default function HomePage() {
           />
         </div>
 
-        <div className="grid gap-3 xl:grid-rows-[2fr_1fr_1fr]">
+        <div className="grid min-h-0 min-w-0 gap-3 xl:grid-rows-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.95fr)]">
           <MainChart ticker={selectedTicker} series={selectedSeries} />
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid min-h-0 gap-3 lg:grid-cols-2">
             <Heatmap positions={portfolio.positions} />
             <PnlChart data={history} />
           </div>
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid min-h-0 gap-3">
             <PositionsTable positions={portfolio.positions} />
-            <TradeBar
-              defaultTicker={selectedTicker}
-              onTrade={trade}
-              onAddTicker={addTicker}
-            />
           </div>
         </div>
 
-        <div className="xl:min-h-[calc(100vh-98px)]">
+        <div className="grid min-h-0 min-w-0 gap-3 xl:grid-rows-[minmax(0,1fr)_auto]">
           <ChatPanel
             messages={chatMessages}
             loading={isChatLoading}
             onSubmit={submitChat}
+          />
+          <TradeBar
+            defaultTicker={selectedTicker}
+            onTrade={trade}
+            onAddTicker={addTicker}
           />
         </div>
       </div>
