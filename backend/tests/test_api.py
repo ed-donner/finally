@@ -37,7 +37,7 @@ def test_default_watchlist_seeded(client: TestClient):
     assert response.status_code == 200
 
     items = response.json()["items"]
-    assert len(items) == 50
+    assert len(items) == 60
     assert {item["ticker"] for item in items} >= {"AAPL", "MSFT", "INTC", "JPM", "XOM"}
     assert all("group" in item for item in items)
     assert {item["group"]["key"] for item in items} >= {
@@ -119,7 +119,7 @@ def test_legacy_default_watchlist_is_migrated_if_unchanged(tmp_path, monkeypatch
     app = create_app()
     with TestClient(app) as local_client:
         payload = local_client.get("/api/watchlist").json()
-        assert len(payload["items"]) == 50
+        assert len(payload["items"]) == 60
         assert "XOM" in {item["ticker"] for item in payload["items"]}
 
 
@@ -170,7 +170,7 @@ def test_legacy_ungrouped_watchlist_is_migrated_even_if_user_changed_it(tmp_path
     with TestClient(app) as local_client:
         payload = local_client.get("/api/watchlist").json()
         tickers = {item["ticker"] for item in payload["items"]}
-        assert len(tickers) == 50
+        assert len(tickers) == 60
         assert "IBM" not in tickers
         assert "XOM" in tickers
 

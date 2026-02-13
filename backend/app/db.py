@@ -28,31 +28,38 @@ DEFAULT_WATCHLIST_GROUPS = [
     {
         "key": "tech",
         "label": "Tech",
-        "tickers": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "ORCL", "CRM", "ADBE", "INTC"],
+        "tickers": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "ORCL", "CRM", "ADBE", "INTC", "AMD", "IBM"],
     },
     {
         "key": "financials",
         "label": "Financials",
-        "tickers": ["JPM", "BAC", "WFC", "C", "GS", "MS", "V", "MA", "AXP", "BLK"],
+        "tickers": ["JPM", "BAC", "WFC", "C", "GS", "MS", "V", "MA", "AXP", "BLK", "SCHW", "PGR"],
     },
     {
         "key": "healthcare",
         "label": "Healthcare",
-        "tickers": ["JNJ", "PFE", "MRK", "UNH", "ABBV", "LLY", "TMO", "ABT", "DHR", "BMY"],
+        "tickers": ["JNJ", "PFE", "MRK", "UNH", "ABBV", "LLY", "TMO", "ABT", "DHR", "BMY", "AMGN", "GILD"],
     },
     {
         "key": "consumer",
         "label": "Consumer",
-        "tickers": ["WMT", "COST", "HD", "MCD", "NKE", "SBUX", "KO", "PEP", "DIS", "NFLX"],
+        "tickers": ["WMT", "COST", "HD", "MCD", "NKE", "SBUX", "KO", "PEP", "DIS", "NFLX", "TGT", "LOW"],
     },
     {
         "key": "industrials-energy",
         "label": "Industrials & Energy",
-        "tickers": ["XOM", "CVX", "CAT", "DE", "BA", "GE", "RTX", "UPS", "UNP", "HON"],
+        "tickers": ["XOM", "CVX", "CAT", "DE", "BA", "GE", "RTX", "UPS", "UNP", "HON", "LMT", "ETN"],
     },
 ]
 
 DEFAULT_WATCHLIST = [ticker for group in DEFAULT_WATCHLIST_GROUPS for ticker in group["tickers"]]
+PREVIOUS_GROUPED_DEFAULT_WATCHLIST = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "ORCL", "CRM", "ADBE", "INTC",
+    "JPM", "BAC", "WFC", "C", "GS", "MS", "V", "MA", "AXP", "BLK",
+    "JNJ", "PFE", "MRK", "UNH", "ABBV", "LLY", "TMO", "ABT", "DHR", "BMY",
+    "WMT", "COST", "HD", "MCD", "NKE", "SBUX", "KO", "PEP", "DIS", "NFLX",
+    "XOM", "CVX", "CAT", "DE", "BA", "GE", "RTX", "UPS", "UNP", "HON",
+]
 CUSTOM_GROUP_KEY = "custom"
 CUSTOM_GROUP_LABEL = "Custom"
 CUSTOM_GROUP_ORDER = 99
@@ -201,6 +208,9 @@ def _seed_defaults(conn: sqlite3.Connection) -> None:
     elif _is_unchanged_legacy_default_watchlist(current_tickers):
         conn.execute("DELETE FROM watchlist WHERE user_id = ?", (DEFAULT_USER_ID,))
         _insert_default_watchlist(conn)
+    elif _is_unchanged_previous_grouped_default_watchlist(current_tickers):
+        conn.execute("DELETE FROM watchlist WHERE user_id = ?", (DEFAULT_USER_ID,))
+        _insert_default_watchlist(conn)
     elif _is_ungrouped_legacy_watchlist(rows):
         conn.execute("DELETE FROM watchlist WHERE user_id = ?", (DEFAULT_USER_ID,))
         _insert_default_watchlist(conn)
@@ -243,6 +253,11 @@ def _insert_default_watchlist(conn: sqlite3.Connection) -> None:
 def _is_unchanged_legacy_default_watchlist(current_tickers: set[str]) -> bool:
     legacy_tickers = set(LEGACY_DEFAULT_WATCHLIST)
     return current_tickers == legacy_tickers
+
+
+def _is_unchanged_previous_grouped_default_watchlist(current_tickers: set[str]) -> bool:
+    previous_tickers = set(PREVIOUS_GROUPED_DEFAULT_WATCHLIST)
+    return current_tickers == previous_tickers
 
 
 def _is_ungrouped_legacy_watchlist(rows: list[sqlite3.Row]) -> bool:

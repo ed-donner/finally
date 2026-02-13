@@ -14,7 +14,7 @@ interface WatchlistPanelProps {
 }
 
 const DESKTOP_COLUMNS = 5;
-const ROWS_PER_COLUMN = 10;
+const ROWS_PER_COLUMN = 12;
 const PREFERRED_GROUP_ORDER = [
   'Tech',
   'Financials',
