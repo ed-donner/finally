@@ -21,8 +21,8 @@ export const ChatPanel = ({ messages, loading, onSubmit }: ChatPanelProps) => {
   };
 
   return (
-    <Panel title="AI Assistant" className="h-full" testId="panel-ai-assistant">
-      <div className="flex h-[520px] min-w-0 flex-col gap-3">
+    <Panel title="AI Assistant" className="flex h-full min-h-0 flex-col" contentClassName="flex min-h-0 flex-1" testId="panel-ai-assistant">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         <div data-testid="chat-messages" className="flex-1 space-y-2 overflow-auto rounded border border-terminal-border bg-terminal-bg/35 p-2">
           {messages.map((entry) => (
             <article
