@@ -2,8 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Dark theme (default) ──────────────────────────────── */
 :root {
   color-scheme: dark;
+
+  --t-bg: 13 17 23;
+  --t-panel: 19 29 43;
+  --t-panelAlt: 25 37 56;
+  --t-border: 42 52 71;
+  --t-text: 215 223 239;
+  --t-dim: 135 160 192;
+  --t-positive: 46 214 143;
+  --t-negative: 242 100 120;
+  --t-accent: 236 173 10;
+  --t-blue: 32 157 215;
+  --t-violet: 117 57 145;
+
+  --shadow-glow: 0 0 0 1px rgba(32,157,215,0.35), 0 8px 24px rgba(0,0,0,0.35);
+}
+
+/* ── Light theme ───────────────────────────────────────── */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --t-bg: 240 242 245;
+  --t-panel: 255 255 255;
+  --t-panelAlt: 232 236 241;
+  --t-border: 200 208 220;
+  --t-text: 26 35 50;
+  --t-dim: 90 111 138;
+  --t-positive: 22 163 100;
+  --t-negative: 220 53 69;
+  --t-accent: 184 134 11;
+  --t-blue: 26 127 181;
+  --t-violet: 107 47 133;
+
+  --shadow-glow: 0 0 0 1px rgba(26,127,181,0.18), 0 2px 8px rgba(0,0,0,0.06);
 }
 
 body {
@@ -13,7 +47,14 @@ body {
     radial-gradient(circle at 20% 10%, rgba(32, 157, 215, 0.14), transparent 36%),
     radial-gradient(circle at 80% 0%, rgba(236, 173, 10, 0.1), transparent 28%),
     linear-gradient(165deg, #0d1117 0%, #121a26 48%, #1a1a2e 100%);
-  color: #d7dfef;
+  color: rgb(var(--t-text));
+}
+
+[data-theme="light"] body {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(26, 127, 181, 0.07), transparent 36%),
+    radial-gradient(circle at 80% 0%, rgba(184, 134, 11, 0.05), transparent 28%),
+    linear-gradient(165deg, #f0f2f5 0%, #e8ecf1 48%, #f0f2f5 100%);
 }
 
 * {

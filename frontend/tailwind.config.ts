@@ -6,21 +6,21 @@ const config: Config = {
     extend: {
       colors: {
         terminal: {
-          bg: '#0d1117',
-          panel: '#131d2b',
-          panelAlt: '#192538',
-          border: '#2a3447',
-          text: '#d7dfef',
-          dim: '#87a0c0',
-          positive: '#2ed68f',
-          negative: '#f26478',
-          accent: '#ecad0a',
-          blue: '#209dd7',
-          violet: '#753991'
+          bg: 'rgb(var(--t-bg) / <alpha-value>)',
+          panel: 'rgb(var(--t-panel) / <alpha-value>)',
+          panelAlt: 'rgb(var(--t-panelAlt) / <alpha-value>)',
+          border: 'rgb(var(--t-border) / <alpha-value>)',
+          text: 'rgb(var(--t-text) / <alpha-value>)',
+          dim: 'rgb(var(--t-dim) / <alpha-value>)',
+          positive: 'rgb(var(--t-positive) / <alpha-value>)',
+          negative: 'rgb(var(--t-negative) / <alpha-value>)',
+          accent: 'rgb(var(--t-accent) / <alpha-value>)',
+          blue: 'rgb(var(--t-blue) / <alpha-value>)',
+          violet: 'rgb(var(--t-violet) / <alpha-value>)',
         }
       },
       boxShadow: {
-        glow: '0 0 0 1px rgba(32,157,215,0.35), 0 8px 24px rgba(0,0,0,0.35)',
+        glow: 'var(--shadow-glow)',
       },
       keyframes: {
         pulseUp: {

@@ -26,10 +26,10 @@ export const Heatmap = ({ positions }: { positions: Position[] }) => {
             >
               <div className="flex items-center justify-between">
                 <p className="font-semibold text-terminal-text">{position.ticker}</p>
-                <p className="text-xs text-terminal-bg">{pct(position.change_percent)}</p>
+                <p className="text-xs text-gray-900">{pct(position.change_percent)}</p>
               </div>
-              <p className="text-xs text-terminal-bg">{compactNumber(position.quantity)} sh</p>
-              <p className="text-sm font-semibold text-terminal-bg">{money(value)}</p>
+              <p className="text-xs text-gray-900">{compactNumber(position.quantity)} sh</p>
+              <p className="text-sm font-semibold text-gray-900">{money(value)}</p>
             </div>
           );
         })}

@@ -106,6 +106,22 @@ test('buy then sell flow updates positions table', async ({ page, request }) => 
   await expect(panels.positions.getByTestId('position-row-ABNB')).toHaveCount(0);
 });
 
+test('theme toggle switches between dark and light mode', async ({ page }) => {
+  await page.goto('/');
+
+  const toggle = page.getByTestId('theme-toggle');
+  await expect(toggle).toBeVisible();
+
+  const html = page.locator('html');
+  await expect(html).not.toHaveAttribute('data-theme', 'light');
+
+  await toggle.click();
+  await expect(html).toHaveAttribute('data-theme', 'light');
+
+  await toggle.click();
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+});
+
 test('mock AI chat executes and displays actions inline @mock-llm', async ({ page, request }) => {
   test.skip(isRealLlmMode, 'Mock chat assertion is disabled in real-LLM mode.');
   await request.delete('/api/watchlist/SHOP');

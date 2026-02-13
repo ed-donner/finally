@@ -1,4 +1,5 @@
 import { ConnectionDot } from '@/src/components/ConnectionDot';
+import { ThemeToggle } from '@/src/context/ThemeContext';
 import { money } from '@/src/lib/format';
 import { ConnectionState } from '@/src/types/trading';
 
@@ -23,6 +24,7 @@ export const Header = ({ totalValue, cash, connectionState }: HeaderProps) => (
         <p className="text-[11px] uppercase tracking-[0.16em] text-terminal-dim">Cash</p>
         <p className="font-semibold text-terminal-accent">{money(cash)}</p>
       </div>
+      <ThemeToggle />
       <ConnectionDot state={connectionState} />
     </div>
   </header>
