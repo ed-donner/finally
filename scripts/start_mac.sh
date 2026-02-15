@@ -4,7 +4,7 @@ set -euo pipefail
 CONTAINER_NAME="finally_agents"
 IMAGE_NAME="finally_agents"
 VOLUME_NAME="finally-data-agents"
-PORT=8001
+PORT=8000
 
 cd "$(dirname "$0")/.."
 
