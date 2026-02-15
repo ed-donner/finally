@@ -220,3 +220,5 @@ db/finally.db-wal
 
 # Docker
 backend/static/
+
+.DS_Store
