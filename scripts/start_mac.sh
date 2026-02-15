@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONTAINER_NAME="finally"
-IMAGE_NAME="finally"
+CONTAINER_NAME="finally-gsd"
+IMAGE_NAME="finally-gsd"
 
 # Stop existing container if running
 docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
@@ -17,10 +17,10 @@ fi
 docker run -d \
     --name "$CONTAINER_NAME" \
     -p 8000:8000 \
-    -v finally-data:/app/db \
+    -v finally-data-gsd:/app/db \
     --env-file .env \
     "$IMAGE_NAME"
 
 echo ""
-echo "FinAlly is running at http://localhost:8000"
+echo "FinAlly is running at http://localhost:8008"
 echo "Stop with: ./scripts/stop_mac.sh"
