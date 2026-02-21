@@ -1,14 +1,18 @@
-# Massive API Integration
+---
+name: massive-api
+description: Use this to write code to retrieve realtime stock market equity prices using the MASSIVE API
+---
 
-This project uses the [Massive](https://pypi.org/project/massive/) Python SDK (a Polygon.io client) to fetch live US stock prices. This document covers the working approach, including critical gotchas discovered during integration.
+# Rertieving Stock Market equity prices with the MASSIVE API
+
+These instructions cover using [Massive](https://pypi.org/project/massive/) Python SDK (formerly known as Polygon.io) to fetch live US stock prices. This document covers the working approach, including critical gotchas discovered during integration.
 
 ## Setup
 
-Install the SDK and set your API key:
+Install the SDK. The MASSIVE_API_KEY is already set in the .env file.
 
 ```bash
-pip install "massive>=1.0.0"
-export MASSIVE_API_KEY="your_key_here"
+uv add massive
 ```
 
 ## Fetching Stock Snapshots
@@ -178,18 +182,3 @@ async def poll_loop(client, tickers, cache, interval=0.5):
                 cache.update(snap.ticker, price, ts)
         await asyncio.sleep(interval)
 ```
-
-## Configuration
-
-| Environment Variable | Default | Description |
-|---|---|---|
-| `MASSIVE_API_KEY` | *(none)* | API key. If unset, falls back to simulated data. |
-| `MASSIVE_POLL_INTERVAL_SECONDS` | `0.5` | Seconds between snapshot polls. Free tier: use `15`. |
-| `MASSIVE_STALE_TRADE_SECONDS` | `10` | Max age of a trade before falling back to quote midpoint. |
-
-## Common Pitfalls
-
-1. **`404 page not found` on snapshot calls** -- You're using `SnapshotMarketType.STOCKS` enum instead of the literal string `"stocks"`.
-2. **`'LastTrade' object has no attribute 'timestamp'`** -- The SDK doesn't always populate `.timestamp`. Use the fallback chain (`sip_timestamp` -> `participant_timestamp` -> `trf_timestamp` -> `snap.updated`).
-3. **Timestamps are enormous numbers** -- They may be in nanoseconds (19 digits). Always normalize to Unix seconds before use.
-4. **Prices are null/stale** -- The free tier allows 5 requests/minute. If you poll faster, you'll get rate-limited. Set `MASSIVE_POLL_INTERVAL_SECONDS=15` for free tier.

@@ -1,20 +1,22 @@
 # FinAlly — AI Trading Workstation
 
+This entire project is to be built and tested according to this specification.
+
 ## Project Specification
 
 ## 1. Vision
 
 FinAlly (Finance Ally) is a visually stunning AI-powered trading workstation that streams live market data, lets users trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on the user's behalf. It looks and feels like a modern Bloomberg terminal with an AI copilot.
 
-This is the capstone project for an agentic AI coding course. It is built entirely by Coding Agents demonstrating how orchestrated AI agents can produce a production-quality full-stack application. Agents interact through files in `planning/`.
+This is designed to be built by Claude Agent Teams working autonomously.
 
 ## 2. User Experience
 
 ### First Launch
 
-The user runs a single Docker command (or a provided start script). A browser opens to `http://localhost:8003`. No login, no signup. They immediately see:
+The user runs a single Docker command (or a provided start script). A browser opens to `http://localhost:8002`. No login, no signup. They immediately see:
 
-- A watchlist of 10 default tickers with live-updating prices in a grid
+- A watchlist of 60 default tickers with live-updating prices in a grid
 - $10,000 in virtual cash
 - A dark, data-rich trading terminal aesthetic
 - An AI chat panel ready to assist
@@ -124,9 +126,8 @@ finally/
 # Required: OpenRouter API key for LLM chat functionality
 OPENROUTER_API_KEY=your-openrouter-api-key-here
 
-# Optional: Massive (Polygon.io) API key for real market data
-# If not set, the built-in market simulator is used (recommended for most users)
-MASSIVE_API_KEY=
+# Massive (Polygon.io) API key for market data
+MASSIVE_API_KEY=xxx
 
 # Optional: Set to "true" for deterministic mock LLM responses (testing)
 LLM_MOCK=false
@@ -134,8 +135,7 @@ LLM_MOCK=false
 
 ### Behavior
 
-- If `MASSIVE_API_KEY` is set and non-empty → backend uses Massive REST API for market data
-- If `MASSIVE_API_KEY` is absent or empty → backend uses the built-in market simulator
+- If `MASSIVE_API_KEY` is set and backend uses Massive REST API for market data
 - If `LLM_MOCK=true` → backend returns deterministic mock LLM responses (for E2E tests)
 - The backend reads `.env` from the project root (mounted into the container or read via docker `--env-file`)
 
@@ -143,20 +143,8 @@ LLM_MOCK=false
 
 ## 6. Market Data
 
-### Two Implementations, One Interface
 
-Both the simulator and the Massive client implement the same abstract interface. The backend selects which to use based on the environment variable. All downstream code (SSE streaming, price cache, frontend) is agnostic to the source.
-
-### Simulator (Default)
-
-- Generates prices using geometric Brownian motion (GBM) with configurable drift and volatility per ticker
-- Updates at ~500ms intervals
-- Correlated moves across tickers (e.g., tech stocks move together)
-- Occasional random "events" — sudden 2-5% moves on a ticker for drama
-- Starts from realistic seed prices (e.g., AAPL ~$190, GOOGL ~$175, etc.)
-- Runs as an in-process background task — no external dependencies
-
-### Massive API (Optional)
+### Massive API - use the Massive API skill for implementation specifics
 
 - REST API polling (not WebSocket) — simpler, works on all tiers
 - Polls for the union of all watched tickers on a configurable interval
@@ -166,7 +154,7 @@ Both the simulator and the Massive client implement the same abstract interface.
 
 ### Shared Price Cache
 
-- A single background task (simulator or Massive poller) writes to an in-memory price cache
+- A single background task (Massive poller) writes to an in-memory price cache
 - The cache holds the latest price, previous price, and timestamp for each ticker
 - SSE streams read from this cache and push updates to connected clients
 - This architecture supports future multi-user scenarios without changes to the data layer
@@ -242,7 +230,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 ### Default Seed Data
 
 - One user profile: `id="default"`, `cash_balance=10000.0`
-- Ten watchlist entries: AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX
+- 60 watchlist entries (12 stock tickers for each of 5 categories)
 
 ---
 
@@ -352,7 +340,7 @@ When `LLM_MOCK=true`, the backend returns deterministic mock responses instead o
 
 The frontend is a single-page application with a dense, terminal-inspired layout. The specific component architecture and layout system is up to the Frontend Engineer, but the UI should include these elements:
 
-- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from SSE since page load)
+- **Watchlist panel** — grid of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from SSE since page load)
 - **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here.
 - **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by P&L (green = profit, red = loss)
 - **P&L chart** — line chart showing total portfolio value over time, using data from `portfolio_snapshots`
@@ -360,6 +348,10 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 - **Trade bar** — simple input area: ticker field, quantity field, buy button, sell button. Market orders, instant fill.
 - **AI chat panel** — docked/collapsible sidebar. Message input, scrolling conversation history, loading indicator while waiting for LLM response. Trade executions and watchlist changes shown inline as confirmations.
 - **Header** — portfolio total value (updating live), connection status indicator, cash balance
+
+### Watchlist specifics
+
+The watchlist should take up the left hand third of the screen. It should show a grid of 5 columns, 12 rows, for the 60 tickers. Each column represents an industry vertical (eg Tech) with a heading.
 
 ### Technical Notes
 
