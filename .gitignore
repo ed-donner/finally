@@ -1,3 +1,15 @@
+# Node / Next.js
+node_modules/
+.next/
+out/
+frontend/out/
+frontend/.next/
+
+# SQLite runtime database
+db/finally.db
+db/finally.db-journal
+db/finally.db-wal
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -193,6 +205,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
