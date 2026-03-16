@@ -1,0 +1,19 @@
+{
+  "name": "ed-tools",
+  "owner": {
+    "name": "Igor Gurovich",
+    "email": "igor.gurovich@gmail.com"
+  },
+  "plugins" : [
+    {
+      "name": "independent-reviewer",
+      "source" : "./independent-reviewer",
+      "description": "Carry out  independent review of all changes since the last commit",
+      "version": "1.0.0",
+      "author": 
+        {
+          "name": "Igor"
+        }
+    }
+  ]
+}
