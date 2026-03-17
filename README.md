@@ -1,62 +1,71 @@
 # FinAlly — AI Trading Workstation
 
-A visually stunning AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM chat assistant that can analyze positions and execute trades via natural language.
+FinAlly (Finance Ally) to stacja tradingowa z asystentem AI, inspirowana terminalem Bloomberga. Streamuje dane rynkowe w czasie rzeczywistym, umożliwia handel symulowanym portfelem i integruje czat LLM, który analizuje pozycje i wykonuje transakcje w imieniu użytkownika.
 
-Built entirely by coding agents as a capstone project for an agentic AI coding course.
+Projekt zbudowany w całości przez agenty kodujące (Coding Agents) jako projekt końcowy kursu agentic AI.
 
-## Features
+## Stos technologiczny
 
-- **Live price streaming** via SSE with green/red flash animations
-- **Simulated portfolio** — $10k virtual cash, market orders, instant fills
-- **Portfolio visualizations** — heatmap (treemap), P&L chart, positions table
-- **AI chat assistant** — analyzes holdings, suggests and auto-executes trades
-- **Watchlist management** — track tickers manually or via AI
-- **Dark terminal aesthetic** — Bloomberg-inspired, data-dense layout
+- **Frontend**: Next.js + TypeScript (static export), Tailwind CSS, Recharts
+- **Backend**: FastAPI (Python), uv
+- **Baza danych**: SQLite
+- **Dane rynkowe**: symulator GBM (domyślnie) lub Massive API (Polygon.io)
+- **AI**: LiteLLM → OpenRouter (Cerebras) ze structured outputs
+- **Infrastruktura**: pojedynczy kontener Docker, port 8000
 
-## Architecture
-
-Single Docker container serving everything on port 8000:
-
-- **Frontend**: Next.js (static export) with TypeScript and Tailwind CSS
-- **Backend**: FastAPI (Python/uv) with SSE streaming
-- **Database**: SQLite with lazy initialization
-- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
-- **Market data**: Built-in GBM simulator (default) or Massive API (optional)
-
-## Quick Start
+## Szybki start
 
 ```bash
-# Clone and configure
+# Skopiuj i uzupełnij zmienne środowiskowe
 cp .env.example .env
-# Add your OPENROUTER_API_KEY to .env
+# Ustaw OPENROUTER_API_KEY w pliku .env
 
-# Run with Docker
-docker build -t finally .
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
+# Uruchom aplikację
+docker compose up -d --build
 
-# Open http://localhost:8000
+# Otwórz w przeglądarce
+open http://localhost:8000
 ```
 
-## Environment Variables
+## Zmienne środowiskowe
 
-| Variable | Required | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
-| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
+| Zmienna | Wymagana | Opis |
+|---------|----------|------|
+| `OPENROUTER_API_KEY` | Tak | Klucz API OpenRouter dla czatu AI |
+| `MASSIVE_API_KEY` | Nie | Klucz Massive API — bez niego działa symulator |
+| `LLM_MOCK` | Nie | `true` = deterministyczne odpowiedzi LLM (testy) |
 
-## Project Structure
+## Funkcjonalności
+
+- Watchlist z 10 domyślnymi tickerami i cenami aktualizowanymi w czasie rzeczywistym (SSE)
+- Sparkline mini-wykresy i szczegółowy wykres wybranego tickera
+- Handel — zlecenia rynkowe, natychmiastowa realizacja, portfel startowy $10 000
+- Heatmapa portfela (treemap) kolorowana wg P&L
+- Tabela pozycji z niezrealizowanym zyskiem/stratą
+- Asystent AI — analiza portfela, wykonywanie transakcji i zarządzanie watchlistą przez czat
+- Reset portfela do stanu początkowego
+
+## Struktura projektu
 
 ```
 finally/
-├── frontend/    # Next.js static export
-├── backend/     # FastAPI uv project
-├── planning/    # Project documentation and agent contracts
-├── test/        # Playwright E2E tests
-├── db/          # SQLite volume mount (runtime)
-└── scripts/     # Start/stop helpers
+├── frontend/          # Next.js (static export)
+├── backend/           # FastAPI (uv project)
+├── planning/          # Dokumentacja projektowa
+├── test/              # Testy E2E (Playwright)
+├── db/                # SQLite (volume mount)
+├── Dockerfile
+└── docker-compose.yml
 ```
 
-## License
+## Zarządzanie
 
-See [LICENSE](LICENSE).
+```bash
+docker compose up -d --build   # Start
+docker compose down             # Stop (dane zachowane)
+docker compose down -v          # Reset (usuwa bazę danych)
+```
+
+## Licencja
+
+Patrz [LICENSE](LICENSE).
