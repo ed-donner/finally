@@ -1,16 +1,16 @@
 ---
-name: cerebras-inference
+name: cerebras
 description: Use this to write code to call an LLM using LiteLLM and OpenRouter with the Cerebras inference provider
 ---
 
 # Calling an LLM via Cerebras
 
-These instructions allow you write code to call an LLM with Cerebras specified as the inference provider.  
+These instructions allow you write code to call an LLM with Cerebras specified as the inference provider.
 This method uses LiteLLM and OpenRouter.
 
 ## Setup
 
-The OPENROUTER_API_KEY must be set in the .env file and loaded in as an environment variable.  
+The OPENROUTER_API_KEY must be set in the .env file and loaded in as an environment variable.
 
 The uv project must include litellm and pydantic.
 `uv add litellm pydantic`
