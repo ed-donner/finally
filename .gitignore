@@ -208,3 +208,9 @@ __marimo__/
 
 
 .DS_Store
+
+# FinAlly project-specific
+db/finally.db
+node_modules/
+.next/
+backend/.venv/
