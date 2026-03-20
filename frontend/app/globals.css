@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+:root {
+  --accent-yellow: #ecad0a;
+  --blue-primary: #209dd7;
+  --purple-secondary: #753991;
+  --bg-base: #0d1117;
+  --bg-surface: #161b22;
+  --bg-elevated: #1c2128;
+  --border-color: #30363d;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --green: #3fb950;
+  --red: #f85149;
+}
+
+@theme inline {
+  --color-background: var(--bg-base);
+  --color-foreground: var(--text-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
+/* Price flash animations */
+@keyframes flashGreen {
+  0% { background-color: rgba(63, 185, 80, 0.35); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flashRed {
+  0% { background-color: rgba(248, 81, 73, 0.35); }
+  100% { background-color: transparent; }
+}
+
+.flash-up {
+  animation: flashGreen 600ms ease-out forwards;
+}
+
+.flash-down {
+  animation: flashRed 600ms ease-out forwards;
+}
+
+/* Pulse dot for connection status */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Sparkline canvas */
+canvas.sparkline {
+  display: block;
+}
