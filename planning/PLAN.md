@@ -66,7 +66,7 @@ The user runs a single Docker command (or a provided start script). A browser op
 - **Backend**: FastAPI (Python), managed as a `uv` project
 - **Database**: SQLite, single file at `db/finally.db`, volume-mounted for persistence
 - **Real-time data**: Server-Sent Events (SSE) — simpler than WebSockets, one-way server→client push, works everywhere
-- **AI integration**: LiteLLM → OpenRouter (Cerebras for fast inference), with structured outputs for trade execution
+- **AI integration**: LiteLLM → Cerebras (direct API, fast inference), with structured outputs for trade execution
 - **Market data**: Environment-variable driven — simulator by default, real data via Massive API if key provided
 
 ### Why These Choices
@@ -110,8 +110,8 @@ finally/
 
 - **`frontend/`** is a self-contained Next.js project. It knows nothing about Python. It talks to the backend via `/api/*` endpoints and `/api/stream/*` SSE endpoints. Internal structure is up to the Frontend Engineer agent.
 - **`backend/`** is a self-contained uv project with its own `pyproject.toml`. It owns all server logic including database initialization, schema, seed data, API routes, SSE streaming, market data, and LLM integration. Internal structure is up to the Backend/Market Data agents.
-- **`backend/db/`** contains schema SQL definitions and seed logic. The backend lazily initializes the database on first request — creating tables and seeding default data if the SQLite file doesn't exist or is empty.
-- **`db/`** at the top level is the runtime volume mount point. The SQLite file (`db/finally.db`) is created here by the backend and persists across container restarts via Docker volume.
+- **`backend/db/`** contains schema SQL definitions and seed logic. The backend lazily initializes the database on first request — creating tables and seeding default data if the SQLite file doesn't exist or is empty. *(Note: `backend/db/` holds source code — SQL schema and seed scripts. Do not confuse it with the top-level `db/` directory.)*
+- **`db/`** at the top level is the **runtime volume mount point only**. The SQLite file (`db/finally.db`) is created here by the backend at runtime and persists across container restarts via Docker volume. This directory contains no source code.
 - **`planning/`** contains project-wide documentation, including this plan. All agents reference files here as the shared contract.
 - **`test/`** contains Playwright E2E tests and supporting infrastructure (e.g., `docker-compose.test.yml`). Unit tests live within `frontend/` and `backend/` respectively, following each framework's conventions.
 - **`scripts/`** contains start/stop scripts that wrap Docker commands.
@@ -121,8 +121,8 @@ finally/
 ## 5. Environment Variables
 
 ```bash
-# Required: OpenRouter API key for LLM chat functionality
-OPENROUTER_API_KEY=your-openrouter-api-key-here
+# Required: Cerebras API key for LLM chat functionality
+CEREBRAS_API_KEY=your-cerebras-api-key-here
 
 # Optional: Massive (Polygon.io) API key for real market data
 # If not set, the built-in market simulator is used (recommended for most users)
@@ -138,6 +138,7 @@ LLM_MOCK=false
 - If `MASSIVE_API_KEY` is absent or empty → backend uses the built-in market simulator
 - If `LLM_MOCK=true` → backend returns deterministic mock LLM responses (for E2E tests)
 - The backend reads `.env` from the project root (mounted into the container or read via docker `--env-file`)
+- `CEREBRAS_API_KEY` is required for LLM chat; the app starts without it but chat endpoints will return an error
 
 ---
 
@@ -159,7 +160,7 @@ Both the simulator and the Massive client implement the same abstract interface.
 ### Massive API (Optional)
 
 - REST API polling (not WebSocket) — simpler, works on all tiers
-- Polls for the union of all watched tickers on a configurable interval
+- Polls for the union of all watchlist tickers and all tickers with open positions on a configurable interval (matches SSE scope — ensures held positions removed from the watchlist remain current)
 - Free tier (5 calls/min): poll every 15 seconds
 - Paid tiers: poll every 2-15 seconds depending on tier
 - Parses REST response into the same format as the simulator
@@ -175,8 +176,8 @@ Both the simulator and the Massive client implement the same abstract interface.
 
 - Endpoint: `GET /api/stream/prices`
 - Long-lived SSE connection; client uses native `EventSource` API
-- Server pushes price updates for all tickers known to the system at a regular cadence (~500ms) — in the single-user model this is equivalent to the user's watchlist
-- Each SSE event contains ticker, price, previous price, timestamp, and change direction
+- Server pushes price updates for the union of all watchlist tickers and all tickers with open positions, at a regular cadence (~500ms). This ensures portfolio P&L stays current even for tickers removed from the watchlist while still holding a position.
+- Each SSE event contains ticker, price, previous price, seed price (price at session start, for computing session change %), timestamp, and change direction
 - Client handles reconnection automatically (EventSource has built-in retry)
 
 ---
@@ -258,7 +259,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 |--------|------|-------------|
 | GET | `/api/portfolio` | Current positions, cash balance, total value, unrealized P&L |
 | POST | `/api/portfolio/trade` | Execute a trade: `{ticker, quantity, side}` |
-| GET | `/api/portfolio/history` | Portfolio value snapshots over time (for P&L chart) |
+| GET | `/api/portfolio/history` | Portfolio value snapshots over time (for P&L chart); returns last 24 hours by default |
 
 ### Watchlist
 | Method | Path | Description |
@@ -270,6 +271,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 ### Chat
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/chat/history` | Load prior conversation messages (for restoring chat UI on page load) |
 | POST | `/api/chat` | Send a message, receive complete JSON response (message + executed actions) |
 
 ### System
@@ -281,9 +283,9 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 
 ## 9. LLM Integration
 
-When writing code to make calls to LLMs, use cerebras-inference skill to use LiteLLM via OpenRouter to the `openrouter/openai/gpt-oss-120b` model with Cerebras as the inference provider. Structured Outputs should be used to interpret the results.
+When writing code to make calls to LLMs, use the cerebras skill to call the Cerebras API directly via LiteLLM, using model `cerebras/qwen-3-235b-a22b-instruct-2507`. Structured Outputs should be used to interpret the results.
 
-There is an OPENROUTER_API_KEY in the .env file in the project root.
+There is a `CEREBRAS_API_KEY` in the `.env` file in the project root.
 
 ### How It Works
 
@@ -292,7 +294,7 @@ When the user sends a chat message, the backend:
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
 2. Loads recent conversation history from the `chat_messages` table
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
-4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
+4. Calls the LLM via LiteLLM → Cerebras (direct API), requesting structured output, using the cerebras skill
 5. Parses the complete structured JSON response
 6. Auto-executes any trades or watchlist changes specified in the response
 7. Stores the message and executed actions in `chat_messages`
@@ -316,7 +318,7 @@ The LLM is instructed to respond with JSON matching this schema:
 
 - `message` (required): The conversational text shown to the user
 - `trades` (optional): Array of trades to auto-execute. Each trade goes through the same validation as manual trades (sufficient cash for buys, sufficient shares for sells)
-- `watchlist_changes` (optional): Array of watchlist modifications
+- `watchlist_changes` (optional): Array of watchlist modifications. Each entry must have `action` set to `"add"` or `"remove"` — no other values are valid; the backend rejects unknown actions.
 
 ### Auto-Execution
 
@@ -339,7 +341,7 @@ The LLM should be prompted as "FinAlly, an AI trading assistant" with instructio
 
 ### LLM Mock Mode
 
-When `LLM_MOCK=true`, the backend returns deterministic mock responses instead of calling OpenRouter. This enables:
+When `LLM_MOCK=true`, the backend returns deterministic mock responses instead of calling Cerebras via LiteLLM. This enables:
 - Fast, free, reproducible E2E tests
 - Development without an API key
 - CI/CD pipelines
@@ -352,10 +354,10 @@ When `LLM_MOCK=true`, the backend returns deterministic mock responses instead o
 
 The frontend is a single-page application with a dense, terminal-inspired layout. The specific component architecture and layout system is up to the Frontend Engineer, but the UI should include these elements:
 
-- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from SSE since page load)
+- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), session change % (labeled "Session %" — calculated as `(current - seed) / seed × 100` where `seed` is the price recorded when the simulator or Massive poller initialised), and a sparkline mini-chart (accumulated from SSE since page load; resets on reconnect — this is acceptable by design)
 - **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here.
 - **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by P&L (green = profit, red = loss)
-- **P&L chart** — line chart showing total portfolio value over time, using data from `portfolio_snapshots`
+- **P&L chart** — line chart showing total portfolio value over time. On load, seed with data from `GET /api/portfolio/history` (last 24 hours of snapshots). Then update live: on every SSE price tick, recalculate total portfolio value client-side (current prices × position quantities + cash), but append a new chart data point at most once per second to avoid unbounded memory growth and chart noise.
 - **Positions table** — tabular view of all positions: ticker, quantity, avg cost, current price, unrealized P&L, % change
 - **Trade bar** — simple input area: ticker field, quantity field, buy button, sell button. Market orders, instant fill.
 - **AI chat panel** — docked/collapsible sidebar. Message input, scrolling conversation history, loading indicator while waiting for LLM response. Trade executions and watchlist changes shown inline as confirmations.
@@ -399,7 +401,7 @@ The SQLite database persists via a named Docker volume:
 docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
 ```
 
-The `db/` directory in the project root maps to `/app/db` in the container. The backend writes `finally.db` to this path.
+The container path `/app/db` is where the backend writes `finally.db`. The named volume `finally-data` is mounted there, providing persistence across container restarts. The project-root `db/` directory is **not** bind-mounted into the container — it exists only to satisfy Docker volume expectations in development and to hold `.gitkeep` in the repo.
 
 ### Start/Stop Scripts
 
@@ -454,3 +456,52 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Open Questions
+
+*No open questions — all resolved.*
+
+---
+
+## 14. Review Notes
+
+### Questions & Clarifications
+
+**Section 6 — SSE Streaming**
+- The spec says the SSE event includes `seed_price` (price at session start for "Session %"), but the current implementation's `PriceUpdate.to_dict()` does not include this field. Who owns the fix — the market data agent or the backend API agent? Should this be treated as a blocker before frontend integration begins?
+- "Session" is defined as when the simulator/poller initialised. Does a container restart reset "Session %"? If so, is that acceptable behaviour, or should the seed price persist to the database so session % survives restarts?
+- The SSE stream pushes updates at ~500ms cadence. Under the Massive API free tier (poll every 15 seconds), 30 consecutive SSE events will carry identical prices. Should the SSE generator suppress duplicate events, or is the frontend expected to handle this gracefully?
+
+**Section 9 — LLM Integration**
+- How many recent `chat_messages` rows are loaded as conversation history? There is no limit specified. Without a cap, long sessions will grow the prompt indefinitely, eventually exceeding the model's context window or slowing responses.
+- If the LLM returns a `trades` array and one trade fails validation (e.g., insufficient cash), do the remaining trades in the array still execute, or does the whole batch abort? This is not specified.
+- The mock mode (`LLM_MOCK=true`) needs to specify what the deterministic response actually contains — at minimum one trade and one watchlist change — so E2E tests can assert against known values.
+
+**Section 7 — Database**
+- `portfolio_snapshots` are recorded every 30 seconds and on every trade. There is no retention or pruning policy. After weeks of continuous use, this table could grow very large. Is pruning out of scope, or should the background task enforce a rolling window (e.g., keep only the last 7 days)?
+- The `positions` table has a UNIQUE constraint on `(user_id, ticker)`. When quantity reaches zero after a full sell, should the row be deleted or kept with `quantity = 0`? The spec is silent on this; it affects how "positions table" renders and whether the portfolio heatmap shows zero-size rectangles.
+
+**Section 10 — Frontend**
+- The P&L chart appends at most one data point per second from live SSE ticks, but there is no cap on total in-memory data points. After hours of use, this could degrade browser performance. Should the frontend enforce a maximum number of in-memory points (e.g., 3,600 for one hour at 1/s)?
+- "Recharts" renders via SVG and struggles with large datasets; "Lightweight Charts" uses canvas and is significantly more performant. The spec says "preferred" but leaves the choice open. For a course demo this matters — recommend standardising on Lightweight Charts for both the main chart and the P&L chart.
+- The AI chat panel is described as "docked/collapsible". What is the default state — open or collapsed? This affects the initial layout and how much space the watchlist/chart area gets by default.
+
+**Section 11 — Docker**
+- The start script says "Builds the Docker image if not already built (or if `--build` flag passed)". If the user edits the code and reruns the script without `--build`, they will be running stale code silently. Consider making `--build` the default, or at least printing a warning.
+- The `.env` file is described as "gitignored, .env.example committed" but no `.gitignore` exists in the repo yet. This is a security risk — `CEREBRAS_API_KEY` could be accidentally committed. Creating `.gitignore` should be an early task.
+
+---
+
+### Simplification Opportunities
+
+1. **`backend/db/` naming confusion** — The distinction between `backend/db/` (source code: schema SQL) and `db/` (runtime volume) is a frequent source of confusion, noted both in this document and in code review. Consider renaming `backend/db/` to `backend/schema/` or `backend/migrations/` to eliminate ambiguity entirely.
+
+2. **`watchlist` UUID primary key** — The `watchlist` table has an `id UUID` primary key, but the natural key is `(user_id, ticker)` which already has a UNIQUE constraint. The UUID is never referenced in any endpoint. Dropping `id` from this table (and possibly `positions`) removes a column that adds complexity without value in a single-user app.
+
+3. **`GET /api/chat/history` vs `POST /api/chat` response** — The chat history endpoint exists solely to restore the UI on page load. If `POST /api/chat` already returns the assistant message and executed actions, the frontend could maintain its own in-memory message list (seeded once on load from `GET /api/chat/history`) without needing a separate round-trip. This is already the implied design — just worth confirming that `GET /api/chat/history` is only called once on load, not polled.
+
+4. **`portfolio_snapshots` background task vs on-trade recording** — Recording a snapshot both every 30 seconds *and* after every trade means the P&L chart may have clusters of close-together points around active trading periods. A simpler approach: record only on trade execution and let the frontend interpolate with SSE-driven live recalculation (already specified). The 30-second background snapshots could be dropped, simplifying the background task. That said, the snapshots provide historical persistence across page reloads, so this is a trade-off worth discussing.
+
+5. **Section 13 "No open questions"** — This section now has content (above). The placeholder text can be removed.
