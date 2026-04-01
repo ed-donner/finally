@@ -1,0 +1,16 @@
+# pack-refs with: peeled fully-peeled sorted 
+dfd92599ec5a21974186b647df78de268a0c14e3 refs/heads/add-claude-github-actions-1770683138213
+84101254e8dc73d5549e5d7953e14d481fafdf35 refs/heads/add-claude-github-actions-1770689748722
+cf41801d4655da3edb3b665d86c9a0a1fc9384d7 refs/heads/agent-teams
+eef1ddc55699ad6a851d34a6da976b42a8ebe090 refs/heads/basic
+395eaa7dffff32a742ed3830c2084897c93607d1 refs/heads/claude/issue-3-20260210-1826
+9df2c798b474f892012290dc2e8ebf7c1051e143 refs/heads/claude/market-data-backend-design-eoSLj
+0472e7d3a6acdbf0f9c1d17df08f5b864d126119 refs/heads/codex
+4e94a35bae4b2c154c3398af2e05b336f98fdbde refs/heads/finally-gsd
+6a2b36e402f3524e223f928d353c2c337c2b8252 refs/heads/fix/market-data-review-items
+47f0c4687c2aab9eb2b295371f07a8e32e8895f2 refs/heads/main
+5594a853428cfd5b197948812c777548bfb46a33 refs/heads/market-data-demo
+7e823b6f96bf933b8d19b331d48cb257d0d52114 refs/heads/market-data-review
+aa5cc13fc213449e7e749df616bc4b286c5751e6 refs/heads/planning/market-data-docs
+a886ea83496fc6108debc842a08f5ced0d7c84e0 refs/heads/polecat/obsidian/fi-gf9@mlinq3m5
+6b568a988d78fce4f556c7446afba347e4cc92b7 refs/heads/start
