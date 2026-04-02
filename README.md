@@ -1,62 +1,64 @@
 # FinAlly — AI Trading Workstation
 
-A visually stunning AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM chat assistant that can analyze positions and execute trades via natural language.
-
-Built entirely by coding agents as a capstone project for an agentic AI coding course.
+A visually striking AI-powered trading workstation with live market data, simulated portfolio management, and an LLM chat assistant that can analyze positions and execute trades. Looks and feels like a Bloomberg terminal with an AI copilot.
 
 ## Features
 
-- **Live price streaming** via SSE with green/red flash animations
-- **Simulated portfolio** — $10k virtual cash, market orders, instant fills
-- **Portfolio visualizations** — heatmap (treemap), P&L chart, positions table
-- **AI chat assistant** — analyzes holdings, suggests and auto-executes trades
-- **Watchlist management** — track tickers manually or via AI
-- **Dark terminal aesthetic** — Bloomberg-inspired, data-dense layout
-
-## Architecture
-
-Single Docker container serving everything on port 8000:
-
-- **Frontend**: Next.js (static export) with TypeScript and Tailwind CSS
-- **Backend**: FastAPI (Python/uv) with SSE streaming
-- **Database**: SQLite with lazy initialization
-- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
-- **Market data**: Built-in GBM simulator (default) or Massive API (optional)
+- Live streaming prices with green/red flash animations
+- Sparkline mini-charts built from the SSE stream
+- $10,000 virtual cash to trade with (market orders, instant fill)
+- Portfolio heatmap (treemap) and P&L chart
+- AI chat assistant — ask questions, get analysis, execute trades via natural language
 
 ## Quick Start
 
 ```bash
-# Clone and configure
+# Copy and fill in your API key
 cp .env.example .env
-# Add your OPENROUTER_API_KEY to .env
 
-# Run with Docker
-docker build -t finally .
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
+# Start (macOS/Linux)
+./scripts/start_mac.sh
 
-# Open http://localhost:8000
+# Start (Windows PowerShell)
+./scripts/start_windows.ps1
 ```
+
+Open [http://localhost:8000](http://localhost:8000).
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
+| `OPENROUTER_API_KEY` | Yes | OpenRouter key for LLM chat |
+| `MASSIVE_API_KEY` | No | Polygon.io key for real market data (simulator used if absent) |
 | `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
 
-## Project Structure
+## Architecture
 
+Single Docker container on port 8000:
+
+- **Frontend**: Next.js (TypeScript), built as a static export, served by FastAPI
+- **Backend**: FastAPI (Python/uv)
+- **Database**: SQLite, volume-mounted at `db/finally.db`
+- **Real-time**: Server-Sent Events (SSE) for price streaming
+- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
+
+## Development
+
+```bash
+# Backend
+cd backend && uv sync --extra dev
+uv run pytest -v
+
+# Frontend
+cd frontend && npm install
+npm run dev
 ```
-finally/
-├── frontend/    # Next.js static export
-├── backend/     # FastAPI uv project
-├── planning/    # Project documentation and agent contracts
-├── test/        # Playwright E2E tests
-├── db/          # SQLite volume mount (runtime)
-└── scripts/     # Start/stop helpers
+
+## Testing
+
+E2E tests use Playwright with `LLM_MOCK=true`:
+
+```bash
+cd test && docker compose -f docker-compose.test.yml up
 ```
-
-## License
-
-See [LICENSE](LICENSE).

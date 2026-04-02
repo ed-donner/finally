@@ -147,13 +147,25 @@ LLM_MOCK=false
 
 Both the simulator and the Massive client implement the same abstract interface. The backend selects which to use based on the environment variable. All downstream code (SSE streaming, price cache, frontend) is agnostic to the source.
 
+### Daily Change %
+
+Both implementations expose a `prev_close` price per ticker, used to compute the "daily change %" shown in the watchlist:
+
+```
+change     = current_price - prev_close
+change_pct = (change / prev_close) * 100
+```
+
+- **Massive API**: fetches `prev_close` once on startup (and when a new ticker is added) via `GET /v2/aggs/ticker/{ticker}/prev` — available on the free tier. The response field is `results[0].c` (previous day's closing price).
+- **Simulator**: each ticker is seeded with a hardcoded `prev_close` that is slightly different from its starting price (e.g., ±0.5–1.5%), giving realistic-looking daily change values from the start.
+
 ### Simulator (Default)
 
 - Generates prices using geometric Brownian motion (GBM) with configurable drift and volatility per ticker
 - Updates at ~500ms intervals
 - Correlated moves across tickers (e.g., tech stocks move together)
 - Occasional random "events" — sudden 2-5% moves on a ticker for drama
-- Starts from realistic seed prices (e.g., AAPL ~$190, GOOGL ~$175, etc.)
+- Starts from realistic seed prices (e.g., AAPL ~$190, GOOGL ~$175, etc.) with a hardcoded `prev_close` per ticker
 - Runs as an in-process background task — no external dependencies
 
 ### Massive API (Optional)
@@ -162,12 +174,13 @@ Both the simulator and the Massive client implement the same abstract interface.
 - Polls for the union of all watched tickers on a configurable interval
 - Free tier (5 calls/min): poll every 15 seconds
 - Paid tiers: poll every 2-15 seconds depending on tier
+- Fetches `prev_close` per ticker via `GET /v2/aggs/ticker/{ticker}/prev` on startup and when new tickers are added
 - Parses REST response into the same format as the simulator
 
 ### Shared Price Cache
 
 - A single background task (simulator or Massive poller) writes to an in-memory price cache
-- The cache holds the latest price, previous price, and timestamp for each ticker
+- The cache holds the latest price, previous price, prev_close, and timestamp for each ticker
 - SSE streams read from this cache and push updates to connected clients
 - This architecture supports future multi-user scenarios without changes to the data layer
 
@@ -228,7 +241,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 **portfolio_snapshots** — Portfolio value over time (for P&L chart). Recorded every 30 seconds by a background task, and immediately after each trade execution.
 - `id` TEXT PRIMARY KEY (UUID)
 - `user_id` TEXT (default: `"default"`)
-- `total_value` REAL
+- `total_value` REAL — cash balance plus market value of all open positions
 - `recorded_at` TEXT (ISO timestamp)
 
 **chat_messages** — Conversation history with LLM
@@ -253,12 +266,81 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 |--------|------|-------------|
 | GET | `/api/stream/prices` | SSE stream of live price updates |
 
+Each SSE event is a JSON object:
+```json
+{
+  "ticker": "AAPL",
+  "price": 191.42,
+  "prev_price": 191.10,
+  "prev_close": 189.50,
+  "change": 0.32,
+  "change_pct": 0.17,
+  "day_change": 1.92,
+  "day_change_pct": 1.01,
+  "direction": "up",
+  "timestamp": "2026-03-31T12:00:00.000Z"
+}
+```
+`direction` is `"up"`, `"down"`, or `"unchanged"`. `change`/`change_pct` are tick-over-tick. `day_change`/`day_change_pct` are relative to `prev_close`.
+
 ### Portfolio
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/portfolio` | Current positions, cash balance, total value, unrealized P&L |
 | POST | `/api/portfolio/trade` | Execute a trade: `{ticker, quantity, side}` |
 | GET | `/api/portfolio/history` | Portfolio value snapshots over time (for P&L chart) |
+
+**GET `/api/portfolio`** response:
+```json
+{
+  "cash": 7430.00,
+  "total_value": 12150.00,
+  "positions": [
+    {
+      "ticker": "AAPL",
+      "quantity": 10,
+      "avg_cost": 185.00,
+      "current_price": 191.42,
+      "market_value": 1914.20,
+      "unrealized_pnl": 64.20,
+      "unrealized_pnl_pct": 3.47
+    }
+  ]
+}
+```
+`total_value` = `cash` + sum of all `market_value`. Positions with `quantity = 0` are omitted.
+
+**POST `/api/portfolio/trade`** request: `{ticker, quantity, side}` where `side` is `"buy"` or `"sell"`.
+
+Success response (`200`):
+```json
+{
+  "ok": true,
+  "trade": {
+    "ticker": "AAPL",
+    "side": "buy",
+    "quantity": 10,
+    "price": 191.42,
+    "executed_at": "2026-03-31T12:00:00.000Z"
+  }
+}
+```
+Error response (`400`):
+```json
+{
+  "ok": false,
+  "error": "Insufficient cash"
+}
+```
+
+**GET `/api/portfolio/history`** response:
+```json
+[
+  {"timestamp": "2026-03-31T11:30:00.000Z", "total_value": 10000.00},
+  {"timestamp": "2026-03-31T12:00:00.000Z", "total_value": 12150.00}
+]
+```
+Ordered oldest-first. Used directly by the P&L chart.
 
 ### Watchlist
 | Method | Path | Description |
@@ -267,15 +349,70 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 | POST | `/api/watchlist` | Add a ticker: `{ticker}` |
 | DELETE | `/api/watchlist/{ticker}` | Remove a ticker |
 
+**GET `/api/watchlist`** response:
+```json
+[
+  {
+    "ticker": "AAPL",
+    "price": 191.42,
+    "prev_price": 191.10,
+    "change": 0.32,
+    "change_pct": 0.17,
+    "direction": "up"
+  }
+]
+```
+If no price is available yet (e.g. ticker just added), `price` is `null` and other price fields are `null`.
+
+**POST `/api/watchlist`** request: `{ticker}`. Returns `201` on success:
+```json
+{"ok": true, "ticker": "PYPL"}
+```
+Returns `400` if ticker already in watchlist, `422` if ticker is invalid/not found in price cache.
+
+**DELETE `/api/watchlist/{ticker}`** returns `200`:
+```json
+{"ok": true, "ticker": "PYPL"}
+```
+Returns `404` if ticker not in watchlist.
+
 ### Chat
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/chat` | Send a message, receive complete JSON response (message + executed actions) |
 
+**POST `/api/chat`** request: `{message: "Buy 5 shares of NVDA"}`.
+
+Response (`200`):
+```json
+{
+  "message": "Done — bought 5 shares of NVDA at $875.10.",
+  "trades_executed": [
+    {
+      "ticker": "NVDA",
+      "side": "buy",
+      "quantity": 5,
+      "price": 875.10,
+      "ok": true
+    }
+  ],
+  "watchlist_changes_executed": [
+    {
+      "ticker": "PYPL",
+      "action": "add",
+      "ok": true
+    }
+  ]
+}
+```
+`trades_executed` and `watchlist_changes_executed` are always present (empty arrays if none). Each item includes `ok: true/false` and an optional `error` string if the action failed validation.
+
 ### System
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/health` | Health check (for Docker/deployment) |
+
+**GET `/api/health`** response (`200`): `{"status": "ok"}`
 
 ---
 
@@ -290,7 +427,7 @@ There is an OPENROUTER_API_KEY in the .env file in the project root.
 When the user sends a chat message, the backend:
 
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
-2. Loads recent conversation history from the `chat_messages` table
+2. Loads the last 50 messages from `chat_messages` (capped to avoid context overflow)
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
 4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
 5. Parses the complete structured JSON response
@@ -309,14 +446,15 @@ The LLM is instructed to respond with JSON matching this schema:
     {"ticker": "AAPL", "side": "buy", "quantity": 10}
   ],
   "watchlist_changes": [
-    {"ticker": "PYPL", "action": "add"}
+    {"ticker": "PYPL", "action": "add"},
+    {"ticker": "NFLX", "action": "remove"}
   ]
 }
 ```
 
 - `message` (required): The conversational text shown to the user
 - `trades` (optional): Array of trades to auto-execute. Each trade goes through the same validation as manual trades (sufficient cash for buys, sufficient shares for sells)
-- `watchlist_changes` (optional): Array of watchlist modifications
+- `watchlist_changes` (optional): Array of watchlist modifications. `action` is `"add"` or `"remove"`.
 
 ### Auto-Execution
 
@@ -454,3 +592,5 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---

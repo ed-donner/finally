@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:polygon.io)",
+      "WebFetch(domain:massive.com)",
+      "Bash(codex exec:*)",
+      "Skill(update-config)"
+    ]
+  }
+}
