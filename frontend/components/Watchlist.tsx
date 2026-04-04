@@ -26,6 +26,7 @@ export default function Watchlist({
   const [addInput, setAddInput] = useState("");
   const prevPricesRef = useRef<Record<string, number>>({});
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Apply flash CSS classes directly to DOM elements
   useEffect(() => {
@@ -51,6 +52,10 @@ export default function Watchlist({
     await addToWatchlist(ticker);
     setAddInput("");
     onRefresh();
+    // Scroll to bottom to reveal the newly added ticker
+    setTimeout(() => {
+      if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+    }, 100);
   }, [addInput, onRefresh]);
 
   const handleRemove = useCallback(
@@ -86,7 +91,7 @@ export default function Watchlist({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={listRef} className="flex-1 overflow-y-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="text-text-muted border-b border-border">

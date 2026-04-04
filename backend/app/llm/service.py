@@ -240,7 +240,6 @@ async def chat_with_llm(user_message: str, price_cache: PriceCache) -> dict:
             model=MODEL,
             messages=messages,
             response_format=LlmResponse,
-            reasoning_effort="low",
             extra_body=EXTRA_BODY,
         )
         content = response.choices[0].message.content
