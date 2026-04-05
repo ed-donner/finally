@@ -16,12 +16,17 @@ class AddTickerRequest(BaseModel):
 async def list_watchlist(request: Request):
     """Current watchlist tickers with latest prices from PriceCache."""
     cache = request.app.state.price_cache
+    source = request.app.state.market_source
     watchlist = await get_watchlist()
 
     items = []
     for entry in watchlist:
         ticker = entry["ticker"]
         update = cache.get(ticker)
+        # Auto-recover tickers not currently tracked (e.g., added in a previous session)
+        if update is None:
+            await source.add_ticker(ticker)
+            update = cache.get(ticker)
         items.append({
             "ticker": ticker,
             "price": update.price if update else None,
