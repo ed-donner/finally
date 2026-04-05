@@ -18,6 +18,7 @@ export default function PriceChart({ ticker, getHistory }: PriceChartProps) {
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
+      autoSize: true,
       layout: {
         background: { color: "#161b22" },
         textColor: "#8b949e",
@@ -52,16 +53,7 @@ export default function PriceChart({ ticker, getHistory }: PriceChartProps) {
     chartRef.current = chart;
     seriesRef.current = series;
 
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        chart.applyOptions({ width, height });
-      }
-    });
-    ro.observe(containerRef.current);
-
     return () => {
-      ro.disconnect();
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
@@ -101,22 +93,21 @@ export default function PriceChart({ ticker, getHistory }: PriceChartProps) {
     });
   });
 
-  if (!ticker) {
-    return (
-      <div className="flex items-center justify-center h-full text-text-muted text-sm">
-        Select a ticker from the watchlist
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       <div className="px-3 py-2 border-b border-border">
         <h2 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
-          {ticker} -- Price Chart
+          {ticker ? `${ticker} -- Price Chart` : "Price Chart"}
         </h2>
       </div>
-      <div ref={containerRef} className="flex-1 min-h-0" />
+      <div className="flex-1 min-h-0 relative">
+        <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
+        {!ticker && (
+          <div className="absolute inset-0 flex items-center justify-center text-text-muted text-sm">
+            Select a ticker from the watchlist
+          </div>
+        )}
+      </div>
     </div>
   );
 }

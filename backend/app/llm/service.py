@@ -26,8 +26,7 @@ from .models import LlmResponse
 
 logger = logging.getLogger(__name__)
 
-MODEL = "openrouter/openai/gpt-oss-120b"
-EXTRA_BODY = {"provider": {"order": ["cerebras"]}}
+MODEL = "claude-sonnet-4-6"
 
 SYSTEM_PROMPT = """You are FinAlly, an AI trading assistant for a simulated trading workstation.
 
@@ -240,8 +239,6 @@ async def chat_with_llm(user_message: str, price_cache: PriceCache) -> dict:
             model=MODEL,
             messages=messages,
             response_format=LlmResponse,
-            reasoning_effort="low",
-            extra_body=EXTRA_BODY,
         )
         content = response.choices[0].message.content
         llm_response = LlmResponse.model_validate_json(content)
