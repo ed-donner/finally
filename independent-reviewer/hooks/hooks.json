@@ -1,0 +1,14 @@
+{
+    "hooks": {
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "codex exec \"Please review all changes since the last commit and write feedback to planning/REVIEW-last-commit.md\""
+                    }
+                ]
+            }
+        ]
+    }
+}

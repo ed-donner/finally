@@ -1,0 +1,5 @@
+{
+    "name": "independent-reviewer",
+    "version": "0.1.0",
+    "description": "carry out an independent review of all changes since last comit"
+}

@@ -1,0 +1,33 @@
+# Review of `planning/PLAN.md`
+
+## Findings
+
+### High: Portfolio history design does not match the promised live P&L chart
+
+The plan says the UI will show "a P&L chart tracking total portfolio value over time", but `portfolio_snapshots` are only recorded "immediately after each trade execution and on backend startup." That means the chart will stay flat while market prices move unless the user trades again, which breaks the core trading-terminal experience and makes the chart materially misleading.
+
+Recommendation: define a background snapshot policy, for example recording total portfolio value every N seconds whenever there is at least one open position, plus on trade execution/startup.
+
+### High: Using SQLite `REAL` for cash, prices, and quantities will cause precision drift
+
+The schema stores `cash_balance`, `quantity`, `avg_cost`, `price`, and `total_value` as `REAL`. Repeated buys/sells and portfolio recomputations will accumulate floating-point error, and this will leak into the UI as incorrect cents, failed equality assertions in tests, and potentially negative dust balances after sells.
+
+Recommendation: specify a fixed-precision representation now. Common options are integer cents for money plus scaled integers for quantity, or explicit decimal handling with consistent rounding rules at every trade boundary.
+
+### High: Trade execution is underspecified for atomicity
+
+A trade touches multiple pieces of state at once: cash balance, positions, trades history, and portfolio snapshots. The plan does not require these writes to happen in a single database transaction. Without that, partial failures can leave the system inconsistent, especially once chat-triggered trades and background tasks are running concurrently.
+
+Recommendation: make trade execution explicitly transactional and define the operation order, including snapshot creation, inside one SQLite transaction.
+
+### Medium: SSE cadence conflicts with the optional market-data polling model
+
+The plan says `/api/stream/prices` pushes updates at about 500ms, but the Massive integration may only refresh data every 15 seconds on the free tier. If the server emits every 500ms regardless, most events will duplicate stale prices and create fake "liveness." If it emits only on real changes, the frontend behavior differs sharply between simulator and real-data modes.
+
+Recommendation: specify SSE semantics clearly: either emit only when underlying prices change, or emit heartbeat/status events separately from price-update events.
+
+### Medium: Ticker/trade validity rules are missing
+
+Manual and AI-driven trades depend on having a current executable price, but the plan does not define whether users can trade symbols outside the watchlist, what happens when a ticker has no price in cache yet, or how invalid/unsupported symbols are rejected. This gap will surface immediately in both the API and chat execution flow.
+
+Recommendation: add explicit rules for tradable tickers, price availability requirements, symbol normalization, and API error responses for unknown or not-yet-priced symbols.

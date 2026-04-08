@@ -1,0 +1,19 @@
+{
+    "name": "lalit-tools",
+    "owner": {
+        "name": "Lalit Nayyar",
+        "email": "lalitnayyar@gmail.com"
+    },
+    "plugins": [
+        {
+            "name": "independent-reviewer",
+            "source": "./independent-reviewer",
+            "version": "1.0.0",
+            "description": "carry out an independent review of all changes since last commit",
+            "author": {
+                "name": "Lalit Nayyar"
+            }
+            
+        }
+    ]
+}
