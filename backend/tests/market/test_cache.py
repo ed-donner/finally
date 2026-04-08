@@ -1,7 +1,5 @@
 """Tests for PriceCache."""
 
-import pytest
-
 from app.market.cache import PriceCache
 
 

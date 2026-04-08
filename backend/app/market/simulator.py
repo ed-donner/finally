@@ -137,6 +137,10 @@ class GBMSimulator:
         """Current price for a ticker, or None if not tracked."""
         return self._prices.get(ticker)
 
+    def get_tickers(self) -> list[str]:
+        """Return the list of currently tracked tickers."""
+        return list(self._tickers)
+
     # --- Internals ---
 
     def _add_ticker_internal(self, ticker: str) -> None:
@@ -251,7 +255,7 @@ class SimulatorDataSource(MarketDataSource):
         logger.info("Simulator: removed ticker %s", ticker)
 
     def get_tickers(self) -> list[str]:
-        return list(self._sim._tickers) if self._sim else []
+        return self._sim.get_tickers() if self._sim else []
 
     async def _run_loop(self) -> None:
         """Core loop: step the simulation, write to cache, sleep."""
