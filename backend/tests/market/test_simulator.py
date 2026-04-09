@@ -1,6 +1,6 @@
 """Tests for GBMSimulator."""
 
-from app.market.seed_prices import SEED_PRICES
+from app.market.seed_prices import SEED_PRICES, TICKER_PARAMS
 from app.market.simulator import GBMSimulator
 
 
@@ -115,6 +115,25 @@ class TestGBMSimulator:
         """Test cross-sector correlation."""
         corr = GBMSimulator._pairwise_correlation("AAPL", "JPM")
         assert corr == 0.3
+
+    def test_all_ten_default_tickers(self):
+        """GBMSimulator initializes cleanly with all 10 default tickers.
+
+        Verifies that the 10x10 correlation matrix produces a valid Cholesky
+        decomposition (i.e., is positive-definite) and that step() returns
+        correct prices for every ticker.
+        """
+        all_tickers = list(TICKER_PARAMS.keys())
+        assert len(all_tickers) == 10
+
+        sim = GBMSimulator(tickers=all_tickers)
+        assert sim._cholesky is not None
+        assert sim._cholesky.shape == (10, 10)
+
+        result = sim.step()
+        assert set(result.keys()) == set(all_tickers)
+        for ticker, price in result.items():
+            assert price > 0, f"{ticker} price should be positive"
 
     def test_default_dt_is_reasonable(self):
         """Test that default dt is a reasonable small value."""

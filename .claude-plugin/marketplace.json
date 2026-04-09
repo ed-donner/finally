@@ -1,0 +1,21 @@
+{
+    "name": "steve-tools",
+    "owner":{
+        "name": "Steve",
+        "email": "steve@example.com"
+    },
+    "plugins": [
+        {
+            "name": "independent-reviewer",
+            "version": "1.0.0",
+            "source": "./independent-reviewer",
+            "description": "Carry out an independent review of all changes since last commit.",
+            "author": 
+                {
+                    "name": "Steve",
+                    "email": "steve@example.com"
+                }
+        }
+        
+    ]
+}
