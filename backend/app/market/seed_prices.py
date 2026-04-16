@@ -33,6 +33,9 @@ TICKER_PARAMS: dict[str, dict[str, float]] = {
 # Default parameters for tickers not in the list above (dynamically added)
 DEFAULT_PARAMS: dict[str, float] = {"sigma": 0.25, "mu": 0.05}
 
+# Default seed price for unknown tickers (per PLAN.md §6)
+DEFAULT_SEED_PRICE: float = 100.00
+
 # Correlation groups for the simulator's Cholesky decomposition
 # Tickers in the same group have higher intra-group correlation
 CORRELATION_GROUPS: dict[str, set[str]] = {
@@ -41,7 +44,7 @@ CORRELATION_GROUPS: dict[str, set[str]] = {
 }
 
 # Correlation coefficients
-INTRA_TECH_CORR = 0.6  # Tech stocks move together
+INTRA_TECH_CORR = 0.6   # Tech stocks move together
 INTRA_FINANCE_CORR = 0.5  # Finance stocks move together
 CROSS_GROUP_CORR = 0.3  # Between sectors / unknown tickers
-TSLA_CORR = 0.3  # TSLA does its own thing
+TSLA_CORR = 0.25        # TSLA does its own thing (issue #9)

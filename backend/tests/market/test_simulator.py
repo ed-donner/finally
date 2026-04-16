@@ -52,12 +52,11 @@ class TestGBMSimulator:
         sim = GBMSimulator(tickers=["AAPL"])
         sim.remove_ticker("NOPE")  # Should not raise
 
-    def test_unknown_ticker_gets_random_seed_price(self):
-        """Test that unknown tickers get random seed prices."""
+    def test_unknown_ticker_gets_default_seed_price(self):
+        """Unknown tickers start at DEFAULT_SEED_PRICE ($100) per PLAN.md §6."""
+        from app.market.seed_prices import DEFAULT_SEED_PRICE
         sim = GBMSimulator(tickers=["ZZZZ"])
-        price = sim.get_price("ZZZZ")
-        assert price is not None
-        assert 50.0 <= price <= 300.0
+        assert sim.get_price("ZZZZ") == DEFAULT_SEED_PRICE
 
     def test_empty_step(self):
         """Test stepping with no tickers."""
@@ -105,11 +104,11 @@ class TestGBMSimulator:
         assert corr == 0.5
 
     def test_pairwise_correlation_tsla(self):
-        """Test that TSLA has lower correlation with everything."""
+        """TSLA has the lowest correlation — 0.25 per design docs."""
         corr = GBMSimulator._pairwise_correlation("TSLA", "AAPL")
-        assert corr == 0.3
+        assert corr == 0.25
         corr = GBMSimulator._pairwise_correlation("TSLA", "JPM")
-        assert corr == 0.3
+        assert corr == 0.25
 
     def test_pairwise_correlation_cross_sector(self):
         """Test cross-sector correlation."""

@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-
-from massive import RESTClient
-from massive.rest.models import SnapshotMarketType
+from typing import Any
 
 from .cache import PriceCache
 from .interface import MarketDataSource
@@ -23,6 +21,9 @@ class MassiveDataSource(MarketDataSource):
     Rate limits:
       - Free tier: 5 req/min → poll every 15s (default)
       - Paid tiers: higher limits → poll every 2-5s
+
+    The `massive` package is imported lazily inside start() so it is only
+    required when MASSIVE_API_KEY is actually set.
     """
 
     def __init__(
@@ -36,9 +37,13 @@ class MassiveDataSource(MarketDataSource):
         self._interval = poll_interval
         self._tickers: list[str] = []
         self._task: asyncio.Task | None = None
-        self._client: RESTClient | None = None
+        self._client: Any = None
 
     async def start(self, tickers: list[str]) -> None:
+        # Lazy import: only required when MASSIVE_API_KEY is set.
+        # Students without a Massive API key never need this package installed.
+        from massive import RESTClient  # noqa: PLC0415
+
         self._client = RESTClient(api_key=self._api_key)
         self._tickers = list(tickers)
 
@@ -101,10 +106,17 @@ class MassiveDataSource(MarketDataSource):
                     price = snap.last_trade.price
                     # Massive timestamps are Unix milliseconds → convert to seconds
                     timestamp = snap.last_trade.timestamp / 1000.0
+                    # Use day.open as open_price; fall back to prev_day.close pre-market
+                    open_price = None
+                    if snap.day and snap.day.open:
+                        open_price = snap.day.open
+                    elif snap.prev_day and snap.prev_day.close:
+                        open_price = snap.prev_day.close
                     self._cache.update(
                         ticker=snap.ticker,
                         price=price,
                         timestamp=timestamp,
+                        open_price=open_price,
                     )
                     processed += 1
                 except (AttributeError, TypeError) as e:
@@ -122,6 +134,8 @@ class MassiveDataSource(MarketDataSource):
 
     def _fetch_snapshots(self) -> list:
         """Synchronous call to the Massive REST API. Runs in a thread."""
+        from massive.rest.models import SnapshotMarketType  # noqa: PLC0415
+
         return self._client.get_snapshot_all(
             market_type=SnapshotMarketType.STOCKS,
             tickers=self._tickers,
