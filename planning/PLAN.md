@@ -454,3 +454,46 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Document Review Notes
+
+### Gaps & Ambiguities
+
+**§6 SSE Streaming — "all tickers known to the system"**
+The SSE endpoint streams prices for "all tickers known to the system." It's unclear whether this means the watchlist only, or all tickers ever cached (including tickers from positions in stocks no longer on the watchlist). This matters when a user holds a position in a delisted watchlist item. Recommend clarifying: SSE streams the union of watchlist + current positions.
+
+**§8 API — no response shape docs**
+The endpoint table describes inputs but not response shapes. Agents implementing the frontend and backend will need to infer or invent these independently. At minimum, `GET /api/portfolio` and `POST /api/chat` response schemas should be documented here, as they're complex enough to cause integration mismatches.
+
+**§9 LLM — chat history window**
+"Loads recent conversation history" — how many messages? No limit is specified. Without a bound, a long session will grow the prompt indefinitely and eventually hit context limits. Recommend specifying a number (e.g., last 20 messages).
+
+**§9 LLM — failed trade feedback loop**
+"If a trade fails validation, the error is included in the chat response" — but the response has already been returned to the frontend at that point. Clarify whether validation happens before or after the LLM call, and whether the LLM response `message` is regenerated to include the error, or whether the backend appends an error annotation. Currently ambiguous.
+
+**§7 Database — `portfolio_snapshots` growth**
+Snapshots accumulate every 30 seconds indefinitely. For a long-running demo session this grows unbounded. The P&L chart doesn't need every data point. Recommend specifying a retention policy (e.g., keep last 24 hours, or downsample after N points).
+
+**§10 Frontend — "daily change %"**
+The watchlist panel should show "daily change %" but the simulator doesn't have a concept of a daily open price — it just uses GBM from startup. Clarify what "daily change" means for the simulator: change since process start? Change from seed price? This affects both the backend SSE payload and frontend display.
+
+### Inconsistencies
+
+**§4 vs §11 — Dockerfile path for static files**
+§4 shows `backend/db/` containing schema SQL. §11 says the Dockerfile copies `frontend build output into a static/ directory` (inside the container), but doesn't say where relative to `/app`. The `docker run` command in §11 only mounts `/app/db`. If static files land at `/app/static/` and FastAPI needs to serve them, the path assumption should be made explicit in the Dockerfile pseudocode.
+
+**§9 — Model name**
+`openrouter/openai/gpt-oss-120b` doesn't match any known OpenRouter model identifier. The cerebras-inference skill likely uses a different model string. This will cause a runtime error for any agent who follows the plan literally. The exact model ID should be taken from the cerebras skill.
+
+### Minor Issues
+
+**§11 Dockerfile — missing lockfile copy**
+`uv sync` requires `uv.lock` to be present. The pseudocode only shows `Copy backend/` — this works if the lockfile is inside `backend/`, but it should be explicit since forgetting the lockfile is a common Docker mistake.
+
+**§2 — Sparklines reset on page refresh**
+Sparklines "accumulated from SSE since page load" are ephemeral by design, but this means they're always empty on first load. Worth a one-line note so the frontend engineer doesn't try to persist or pre-populate them from the API.
+
+**§12 — E2E test gap: LLM mock content undefined**
+The E2E tests use `LLM_MOCK=true` and test "trade execution appears inline" — but nowhere in the plan is the mock response content specified. The backend must return a deterministic mock that includes at least one trade for the test to pass. The mock payload should be documented (even briefly) so backend and E2E test implementations agree.
