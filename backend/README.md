@@ -10,7 +10,7 @@ FastAPI backend for the FinAlly AI Trading Workstation.
     - `cache.py` - Thread-safe price cache
     - `interface.py` - MarketDataSource abstract interface
     - `simulator.py` - GBM-based market simulator
-    - `massive_client.py` - Massive/Polygon.io API client
+    - `massive_client.py` - Massive API client
     - `factory.py` - Data source factory
     - `stream.py` - SSE streaming endpoint
     - `seed_prices.py` - Default ticker prices and parameters
@@ -39,7 +39,10 @@ uv run pytest -v
 
 ## Environment Variables
 
+- `OPENROUTER_API_KEY` - Optional. If set, use live OpenRouter-backed chat. If not set, chat falls back to deterministic mock mode.
+- `LLM_MOCK` - Optional. Set to `true` to force deterministic mock chat responses.
 - `MASSIVE_API_KEY` - Optional. If set, use real market data from Massive API. If not set, use the built-in simulator.
+- `SIMULATOR_SEED` - Optional. Integer RNG seed for deterministic simulator runs in tests.
 
 ## Development
 

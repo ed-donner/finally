@@ -1,61 +1,64 @@
 # FinAlly — AI Trading Workstation
 
-A visually stunning AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM chat assistant that can analyze positions and execute trades via natural language.
+An AI-powered trading workstation that streams live market data, simulates a $10k portfolio, and ships with an LLM chat assistant that can analyze positions and execute approved trades via natural language.
 
-Built entirely by coding agents as a capstone project for an agentic AI coding course.
+Built as the capstone project for an agentic AI coding course. The full specification lives in [`planning/PLAN.md`](planning/PLAN.md).
 
-## Features
+## Stack
 
-- **Live price streaming** via SSE with green/red flash animations
-- **Simulated portfolio** — $10k virtual cash, market orders, instant fills
-- **Portfolio visualizations** — heatmap (treemap), P&L chart, positions table
-- **AI chat assistant** — analyzes holdings, suggests and auto-executes trades
-- **Watchlist management** — track tickers manually or via AI
-- **Dark terminal aesthetic** — Bloomberg-inspired, data-dense layout
+- **Backend** — FastAPI (Python 3.12+, managed with `uv`), SQLite, SSE streaming
+- **Frontend** — Next.js 15 + React 19, TypeScript, Tailwind CSS, TradingView Lightweight Charts, Recharts
+- **AI** — LiteLLM → OpenRouter (`openrouter/openai/gpt-oss-120b`) with structured outputs
+- **Market data** — In-process GBM simulator by default, optional Massive REST client
 
-## Architecture
+## Running Locally
 
-Single Docker container serving everything on port 8000:
-
-- **Frontend**: Next.js (static export) with TypeScript and Tailwind CSS
-- **Backend**: FastAPI (Python/uv) with SSE streaming
-- **Database**: SQLite with lazy initialization
-- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
-- **Market data**: Built-in GBM simulator (default) or Massive API (optional)
-
-## Quick Start
+Configure environment variables at the repo root in `.env` (all optional):
 
 ```bash
-# Clone and configure
-cp .env.example .env
-# Add your OPENROUTER_API_KEY to .env
-
-# Run with Docker
-docker build -t finally .
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
-
-# Open http://localhost:8000
+OPENROUTER_API_KEY=     # omit to run chat in deterministic mock mode
+MASSIVE_API_KEY=        # omit to run the built-in simulator
+LLM_MOCK=false          # true forces mock chat responses
+SIMULATOR_SEED=         # integer seed for reproducible price paths
 ```
 
-## Environment Variables
+Backend (serves the API on http://localhost:8000):
 
-| Variable | Required | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
-| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
+```bash
+cd backend
+uv sync --extra dev
+uv run uvicorn app.main:app --reload
+```
 
-## Project Structure
+Frontend (Next.js dev server on http://localhost:3000, proxies to the backend):
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The backend lazily creates `backend/db/finally.db` on first request and seeds the default watchlist (AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX), a `default` user profile with $10,000 cash, and an initial portfolio snapshot.
+
+## Tests
+
+```bash
+cd backend
+uv run --extra dev pytest           # full suite
+uv run --extra dev ruff check .     # lint
+```
+
+## Repository Layout
 
 ```
 finally/
-├── frontend/    # Next.js static export
-├── backend/     # FastAPI uv project
-├── planning/    # Project documentation and agent contracts
-├── test/        # Playwright E2E tests
-├── db/          # SQLite volume mount (runtime)
-└── scripts/     # Start/stop helpers
+├── backend/    FastAPI app (app/), schema + seed (db/), pytest suite (tests/)
+├── frontend/   Next.js app (app/, components/, lib/)
+├── planning/   Project specification — PLAN.md is the source of truth
+└── CLAUDE.md   Agent instructions
 ```
+
+Docker packaging, start/stop scripts, and end-to-end Playwright tests described in `planning/PLAN.md` are not yet in the repo.
 
 ## License
 
