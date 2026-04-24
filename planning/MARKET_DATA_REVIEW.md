@@ -1,173 +1,232 @@
-# Market Data Backend — Code Review
+# Market Data — Code Review
 
-**Date:** 2026-02-10
-**Scope:** `backend/app/market/` (8 source files) and `backend/tests/market/` (6 test files)
-
----
-
-## 1. Test Results Summary
-
-**73 tests collected, 68 passed, 5 failed.**
-
-All failures are in `test_massive.py` and stem from the same root cause: the `massive` package is not installed in the test environment, so `patch("app.market.massive_client.RESTClient")` fails with `AttributeError` because the module-level name `RESTClient` was never imported (it is lazy-imported inside methods). This is an environment issue, not a logic bug — the tests are correctly structured but require the `massive` package to be available (or `create=True` on the patch) so that the mock target exists.
-
-Failing tests:
-- `test_poll_updates_cache` — `asyncio.to_thread` fails because `_fetch_snapshots` is not properly mocked when `massive` is absent
-- `test_malformed_snapshot_skipped` — same cause
-- `test_timestamp_conversion` — same cause
-- `test_stop_cancels_task` — `patch("app.market.massive_client.RESTClient")` fails because the name doesn't exist at module level
-- `test_start_immediate_poll` — same as above
-
-The underlying `_poll_once()` logic itself is correct. The 3 tests that mock `source._fetch_snapshots` directly fail because `asyncio.to_thread(self._fetch_snapshots)` calls the real method which tries to import `massive`. The 2 tests that use `patch("app.market.massive_client.RESTClient")` fail because the name doesn't exist in the module's namespace (lazy import). Both issues resolve when the `massive` package is installed.
-
-**Lint (ruff):** Source code passes clean. Tests have 5 unused-import warnings (`pytest`, `math`, `asyncio` imported but not used in some test files).
-
-**Coverage:** 84% overall.
-| Module | Coverage | Notes |
-|---|---|---|
-| models.py | 100% | |
-| cache.py | 100% | |
-| interface.py | 100% | |
-| seed_prices.py | 100% | |
-| factory.py | 100% | |
-| simulator.py | 98% | Uncovered: `_add_ticker_internal` duplicate guard (L145), exception log in `_run_loop` (L264-265) |
-| massive_client.py | 56% | Expected — real API methods can't run without the massive package |
-| stream.py | 31% | Expected — SSE generator requires a running ASGI server to test |
+Reviewed against: `PLAN.md`, `MARKET_INTERFACE.md`, `MARKET_SIMULATOR.md`, `MASSIVE_API.md`, `MARKET_DATA_DESIGN.md`
+Implementation: `backend/app/market/`
+Tests: `backend/tests/market/`
 
 ---
 
-## 2. Architecture Assessment
-
-The market data subsystem is well-designed. It follows a clean strategy pattern:
+## Test Results
 
 ```
-MarketDataSource (ABC)
-├── SimulatorDataSource  (GBM simulator)
-└── MassiveDataSource    (Polygon.io REST poller)
-        │
-        ▼
-   PriceCache (shared, thread-safe)
-        │
-        ▼
-   SSE stream → Frontend
+73 passed in 4.87s
+Linting: All checks passed (ruff)
 ```
 
-**Strengths:**
-- Clear separation of concerns across 8 focused modules
-- Factory pattern with lazy imports — the `massive` package is only needed when `MASSIVE_API_KEY` is set
-- PriceCache as the single point of truth decouples producers from consumers
-- Immutable `PriceUpdate` dataclass with `frozen=True, slots=True` is correct and efficient
-- The GBM math is proper: log-normal price paths via `exp((mu - 0.5*sigma^2)*dt + sigma*sqrt(dt)*Z)`
-- Correlated moves via Cholesky decomposition are a nice touch for realism
-- All background tasks are properly cancellable and idempotent on stop()
+**Coverage by module:**
+
+| File | Coverage | Missing lines |
+|------|----------|---------------|
+| `models.py` | 100% | — |
+| `cache.py` | 100% | — |
+| `factory.py` | 100% | — |
+| `interface.py` | 100% | — |
+| `seed_prices.py` | 100% | — |
+| `simulator.py` | 98% | 149, 268–269 (exception branch in run loop) |
+| `massive_client.py` | 94% | 85–87, 125 (poll loop body, fetch method) |
+| `stream.py` | **33%** | 26–48, 62–87 (the entire SSE route and generator) |
+| **Total** | **91%** | |
+
+All tests pass and linting is clean. The implementation is well-structured, readable, and the core modules are very well covered. The issues below are all actionable and none require architectural rework.
 
 ---
 
-## 3. Issues Found
+## Issues
 
-### 3.1 Build Configuration Bug (Severity: High)
+### 1. `open_price` is missing entirely — CRITICAL
 
-`pyproject.toml` is missing the hatchling package discovery configuration. Running `uv sync` fails:
+**PLAN.md §6** is explicit:
 
+> The price cache holds `{price, prev_price, open_price, timestamp, direction}` per ticker. `open_price` is the seed price at session start and is the baseline for "daily change %" calculations on the frontend.
+
+The actual `PriceUpdate` dataclass has no `open_price` field, and `PriceCache.update()` has no `open_price` parameter. The frontend formula `(price - open_price) / open_price * 100` cannot be computed from the SSE stream. `GET /api/watchlist` is also specified to return `open_price` — it cannot without this field.
+
+**Impact:** Daily change % column in the watchlist panel will not work.
+
+**Fix:** Add `open_price: float` to `PriceUpdate`. Update `PriceCache.update()` to accept and store it (set on first update, never overwritten). Seed it in `SimulatorDataSource.start()` and `add_ticker()`. Pass `day.open` / `prev_day.close` from the Massive client.
+
+---
+
+### 2. Field name `previous_price` vs `prev_price` — CRITICAL
+
+**PLAN.md §6** pins the SSE event field names:
+
+```json
+{"ticker": "AAPL", "price": 191.50, "prev_price": 191.32, "timestamp": "...", "direction": "up"}
 ```
-ValueError: Unable to determine which files to ship inside the wheel
+
+The implementation uses `previous_price` throughout (`PriceUpdate`, `PriceCache`, `to_dict()`, all tests). The frontend `EventSource` handler will read `event.prev_price` and get `undefined`.
+
+**Impact:** Price flash animations and change calculations on the frontend will silently break.
+
+**Fix:** Rename `previous_price` → `prev_price` in `models.py`, `cache.py`, all tests, and `CLAUDE.md`.
+
+---
+
+### 3. Timestamp format in SSE events is wrong — CRITICAL
+
+**PLAN.md §6** requires ISO 8601:
+
+```json
+{"timestamp": "2026-04-10T12:00:00.500Z"}
 ```
 
-**Fix:** Add to `pyproject.toml`:
-```toml
-[tool.hatch.build.targets.wheel]
-packages = ["app"]
-```
+`PriceUpdate.to_dict()` returns a raw Unix float (`1234567890.0`). The frontend will receive a number, not a parseable date string.
 
-This will block Docker builds and any fresh `uv sync` until fixed.
-
-### 3.2 Massive Test Fragility (Severity: Medium)
-
-Five tests in `test_massive.py` fail when the `massive` package is not installed. The root cause is twofold:
-
-1. **`_poll_once` uses `asyncio.to_thread(self._fetch_snapshots)`** — even when `_fetch_snapshots` is patched on the instance, `to_thread` runs it in a thread executor. Three tests mock `_fetch_snapshots` as a `MagicMock` (synchronous), but `asyncio.to_thread` wraps it in `loop.run_in_executor`, which works... except that when `_fetch_snapshots` is NOT patched, the real method tries `from massive.rest.models import SnapshotMarketType` and fails.
-
-2. **`patch("app.market.massive_client.RESTClient")`** targets a name that doesn't exist at module level because `massive_client.py` uses a lazy import inside `start()`. The patch needs `create=True` or the import needs to be at module level behind a `TYPE_CHECKING` guard.
-
-These tests pass when `massive>=1.0.0` is installed (as `pyproject.toml` declares it as a core dependency), so this is technically a test-environment issue, not a code bug. However, since the whole point of lazy imports is to make `massive` optional for simulator-only use, the tests should also work without it.
-
-### 3.3 `_generate_events` Return Type Annotation (Severity: Low)
-
-`stream.py:54` declares the return type as `-> None` but the function is an async generator (it uses `yield`). The correct annotation would be `-> AsyncGenerator[str, None]` or simply removing the annotation. This doesn't cause runtime issues but is misleading for type checkers and developers.
-
-### 3.4 `version` Property Not Under Lock (Severity: Low)
-
-`PriceCache.version` reads `self._version` without acquiring `self._lock`:
+**Fix:** In `to_dict()` (or a dedicated `to_sse_dict()` method), convert `self.timestamp` to ISO format:
 
 ```python
-@property
-def version(self) -> int:
-    return self._version
+from datetime import datetime, timezone
+ts = datetime.fromtimestamp(self.timestamp, tz=timezone.utc).isoformat().replace("+00:00", "Z")
 ```
 
-On CPython with the GIL, reading a single `int` is atomic, so this won't cause corruption. However, it's inconsistent with the rest of the class, and if the project ever runs on a no-GIL Python build (PEP 703, Python 3.13t+), this could become a race. A minor concern given the current context.
+---
 
-### 3.5 `SimulatorDataSource.get_tickers` Accesses Private State (Severity: Low)
+### 4. `massive_client.py` has top-level imports — HIGH
 
-`simulator.py:254`:
 ```python
-def get_tickers(self) -> list[str]:
-    return list(self._sim._tickers) if self._sim else []
+# massive_client.py lines 8–9
+from massive import RESTClient
+from massive.rest.models import SnapshotMarketType
 ```
 
-This reaches into `GBMSimulator._tickers` (private attribute). `GBMSimulator` should expose a `get_tickers()` method or a `tickers` property to keep the boundary clean.
+`factory.py` also imports `MassiveDataSource` eagerly at module load:
 
-### 3.6 Module-Level Router Instance (Severity: Low)
+```python
+# factory.py lines 10–11
+from .massive_client import MassiveDataSource
+from .simulator import SimulatorDataSource
+```
 
-`stream.py:16` creates a module-level `router` object, and `create_stream_router()` registers a route on it via closure. If `create_stream_router` were called twice (e.g., in tests), the `/prices` route would be registered twice on the same router. In practice this won't happen because the function is called once during app startup, but it's a latent footgun for testing.
+The design intent (and PLAN.md) was that `massive` is an optional dependency only needed when `MASSIVE_API_KEY` is set. The top-level imports mean the package is imported on every app startup regardless. Because `massive` is also listed as a hard dependency in `pyproject.toml`, this doesn't cause a runtime crash today — but it contradicts the spec and will cause issues in any deployment that doesn't install `massive` (e.g., students following a minimal setup, Docker builds that want a leaner image).
 
-### 3.7 Unused Imports in Tests (Severity: Trivial)
+**Fix:** Move imports to inside the functions that use them (lazy imports):
 
-Five lint warnings from `ruff`:
-- `test_cache.py`: unused `pytest`
-- `test_factory.py`: unused `pytest`
-- `test_massive.py`: unused `asyncio`
-- `test_simulator.py`: unused `math`, unused `pytest`
+```python
+# factory.py
+def create_market_data_source(price_cache):
+    api_key = os.environ.get("MASSIVE_API_KEY", "").strip()
+    if api_key:
+        from .massive_client import MassiveDataSource   # lazy
+        return MassiveDataSource(...)
+    else:
+        from .simulator import SimulatorDataSource      # lazy
+        return SimulatorDataSource(...)
+```
 
----
-
-## 4. Design Observations
-
-### 4.1 Things Done Well
-
-- **GBM parameter tuning is thoughtful.** TSLA at sigma=0.50 vs V at 0.17 reflects real-world volatility differences. The shock event system (~0.1% per tick, producing visible moves every ~50s) adds visual drama without destabilizing prices.
-- **Cholesky decomposition for correlated moves** is the mathematically correct approach. The sector-based correlation structure (tech 0.6, finance 0.5, cross 0.3) is reasonable.
-- **Defensive error handling in both data sources.** Both `_run_loop` (simulator) and `_poll_once`/`_poll_loop` (massive) catch exceptions and continue, which is essential for a long-running background service.
-- **SSE implementation is clean.** The version-based change detection avoids sending redundant payloads. The `retry: 1000\n\n` directive ensures browser auto-reconnect. Nginx buffering is proactively disabled.
-- **Seed prices in the cache at start** means the frontend gets data on the first SSE poll, with no visible delay.
-- **Thread-safe cache with Lock** is the right choice since the Massive client runs API calls via `asyncio.to_thread`.
-
-### 4.2 Missing Tests
-
-- **SSE streaming (`stream.py`)** at 31% coverage has no dedicated tests. Testing SSE requires an ASGI test client (e.g., `httpx.AsyncClient` with `app`). Given that this is the primary consumer of PriceCache, even a basic integration test would add confidence.
-- **No concurrent/thread-safety test for PriceCache.** The lock usage looks correct from inspection, but a test with multiple threads writing simultaneously would verify it empirically.
-- **No test for `GBMSimulator` with all 10 default tickers.** Tests use 1-2 tickers. A test confirming the Cholesky decomposition succeeds for the full 10-ticker default set would catch correlation matrix issues.
-
-### 4.3 Potential Future Considerations
-
-- The `PriceCache` doesn't cap history; it only stores the latest price per ticker, so memory is bounded at O(tickers). Good.
-- The `DEFAULT_CORR` constant (0.3, `seed_prices.py:48`) is defined but never referenced in `_pairwise_correlation`. The static method returns `CROSS_GROUP_CORR` (also 0.3) as the fallback. This is semantically confusing — `DEFAULT_CORR` seems intended for tickers not in any group, but the code returns `CROSS_GROUP_CORR` for all non-matched pairs. Both happen to be 0.3, so behavior is correct, but the naming is misleading.
+Move `massive` to `[project.optional-dependencies]` in `pyproject.toml`.
 
 ---
 
-## 5. Verdict
+### 5. SSE wire format deviates from spec — HIGH
 
-The market data backend is solid and well-structured. The GBM simulator, price cache, abstract interface, factory pattern, and SSE streaming all work correctly and follow good practices. The architecture will integrate cleanly with the rest of the application.
+`stream.py` sends all tickers in a single JSON object per tick:
 
-**Must fix before proceeding:**
-1. Add `[tool.hatch.build.targets.wheel] packages = ["app"]` to `pyproject.toml` — without this, `uv sync` and Docker builds fail.
+```
+data: {"AAPL": {"ticker": "AAPL", ...}, "GOOGL": {"ticker": "GOOGL", ...}}
+```
 
-**Should fix:**
-2. Make the Massive tests resilient to the `massive` package being absent (use `create=True` on patches, or restructure mocks).
-3. Fix the `_generate_events` return type annotation.
-4. Remove unused imports in test files.
+PLAN.md §6 and `MARKET_INTERFACE.md` specify individual per-ticker events:
 
-**Nice to have:**
-5. Add a `get_tickers()` public method to `GBMSimulator`.
-6. Add at least one SSE integration test.
-7. Clarify `DEFAULT_CORR` vs `CROSS_GROUP_CORR` naming.
+```
+data: {"ticker": "AAPL", "price": 191.50, "prev_price": 191.32, ...}
+
+data: {"ticker": "GOOGL", "price": 175.12, ...}
+```
+
+The frontend `EventSource.onmessage` handler will need to be written to match whichever format the backend produces. These are different enough that one handler cannot handle both. If the frontend is coded to the spec (individual events), it will silently ignore the batched format or need unwrapping.
+
+This is worth resolving before the Frontend agent starts work so there is one unambiguous contract.
+
+---
+
+### 6. `stream.py` has 33% test coverage — HIGH
+
+The SSE streaming endpoint is the core real-time feature and has essentially no test coverage. The untested code includes:
+
+- The FastAPI route registration (`/api/stream/prices`)
+- The `_generate_events` async generator — version-change detection, disconnect handling, event formatting
+
+There are no tests that verify the wire format of SSE events, that the `retry` directive is sent, or that the generator stops on client disconnect. This is the highest-value gap in the test suite.
+
+**Suggested tests:** Use `httpx` with `AsyncClient` and FastAPI's `TestClient` / async streaming to verify: (a) events are `text/event-stream`, (b) each event is valid JSON with the required fields, (c) version-based deduplication skips unchanged data.
+
+---
+
+### 7. Unknown ticker seed price is random, not $100 — MEDIUM
+
+**PLAN.md §6:**
+
+> When a ticker not in the default seed list is added, it starts with a seed price of **$100.00**.
+
+**`simulator.py:151`:**
+
+```python
+self._prices[ticker] = SEED_PRICES.get(ticker, random.uniform(50.0, 300.0))
+```
+
+`seed_prices.py` correctly defines `DEFAULT_SEED_PRICE = 100.00`, but `simulator.py` does not import or use it — it uses an inline `random.uniform` instead.
+
+**Impact:** Users adding custom tickers to the watchlist will see inconsistent, unpredictable starting prices rather than the specified $100.
+
+**Fix:**
+
+```python
+from .seed_prices import DEFAULT_SEED_PRICE, SEED_PRICES, TICKER_PARAMS
+# ...
+self._prices[ticker] = SEED_PRICES.get(ticker, DEFAULT_SEED_PRICE)
+```
+
+---
+
+### 8. `create_stream_router` mutates a module-level router — MINOR
+
+```python
+# stream.py
+router = APIRouter(prefix="/api/stream", tags=["streaming"])
+
+def create_stream_router(price_cache: PriceCache) -> APIRouter:
+    @router.get("/prices")           # decorates the module-level router
+    async def stream_prices(...):
+        ...
+    return router
+```
+
+Calling `create_stream_router()` more than once (e.g., in tests) will register duplicate routes on the same `router` object. The factory pattern should return a fresh router:
+
+```python
+def create_stream_router(price_cache: PriceCache) -> APIRouter:
+    router = APIRouter(prefix="/api/stream", tags=["streaming"])
+    @router.get("/prices")
+    async def stream_prices(...):
+        ...
+    return router
+```
+
+---
+
+### 9. TSLA correlation constant inconsistency — MINOR
+
+`seed_prices.py` defines `TSLA_CORR = 0.3`. `MARKET_SIMULATOR.md` specifies `0.25` for TSLA ("loner" behaviour). Both values are reasonable, but the documentation and code are inconsistent. If the design intent was 0.25, update `seed_prices.py`. If 0.3 is intentional, update the docs.
+
+---
+
+## Summary
+
+| # | Severity | Issue |
+|---|----------|-------|
+| 1 | Critical | `open_price` missing from `PriceUpdate` and `PriceCache` — breaks daily change % |
+| 2 | Critical | Field named `previous_price`, spec requires `prev_price` — frontend contract broken |
+| 3 | Critical | SSE timestamp is Unix float, spec requires ISO 8601 string |
+| 4 | High | Top-level `massive` imports — breaks optional dependency design intent |
+| 5 | High | SSE sends batched object, spec requires individual per-ticker events |
+| 6 | High | `stream.py` has 33% coverage — SSE format/behaviour untested |
+| 7 | Medium | Unknown ticker seeds at random price instead of $100 as specified |
+| 8 | Minor | `create_stream_router` mutates a module-level router (duplicate route risk) |
+| 9 | Minor | TSLA_CORR is 0.3 in code vs 0.25 in design docs |
+
+**Issues 1, 2, 3, and 5** are a connected set — they all define the SSE/frontend contract. They should be resolved together before the Frontend agent starts consuming the stream, as they will otherwise require a coordinated frontend + backend change later.
+
+**Issue 4 (lazy imports)** is a clean-up item that should be addressed to align with the documented design intent, even though it doesn't cause a runtime failure with the current `pyproject.toml`.
+
+**Issue 6 (stream.py coverage)** is the most impactful gap to address in the test suite.

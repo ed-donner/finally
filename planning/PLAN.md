@@ -130,6 +130,9 @@ MASSIVE_API_KEY=
 
 # Optional: Set to "true" for deterministic mock LLM responses (testing)
 LLM_MOCK=false
+
+# Optional: Portfolio snapshot recording interval in seconds (default: 60)
+PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS=60
 ```
 
 ### Behavior
@@ -150,11 +153,12 @@ Both the simulator and the Massive client implement the same abstract interface.
 ### Simulator (Default)
 
 - Generates prices using geometric Brownian motion (GBM) with configurable drift and volatility per ticker
-- Updates at ~500ms intervals
+- Updates at ~500ms intervals — **a single update loop drives both simulation and SSE delivery; there are no two independent timers**
 - Correlated moves across tickers (e.g., tech stocks move together)
 - Occasional random "events" — sudden 2-5% moves on a ticker for drama
 - Starts from realistic seed prices (e.g., AAPL ~$190, GOOGL ~$175, etc.)
 - Runs as an in-process background task — no external dependencies
+- **The active ticker set mirrors the watchlist**: tickers are added to simulation when added to the watchlist; removed immediately when removed. When a ticker not in the default seed list is added, it starts with a seed price of `$100.00` and standard volatility parameters.
 
 ### Massive API (Optional)
 
@@ -175,8 +179,22 @@ Both the simulator and the Massive client implement the same abstract interface.
 
 - Endpoint: `GET /api/stream/prices`
 - Long-lived SSE connection; client uses native `EventSource` API
-- Server pushes price updates for all tickers known to the system at a regular cadence (~500ms) — in the single-user model this is equivalent to the user's watchlist
-- Each SSE event contains ticker, price, previous price, timestamp, and change direction
+- Server pushes price updates for **all tickers in the user's current watchlist** at each simulator tick (~500ms)
+- Each SSE event is a JSON object with these exact fields:
+
+```json
+{
+  "ticker": "AAPL",
+  "price": 191.50,
+  "prev_price": 191.32,
+  "timestamp": "2026-04-10T12:00:00.500Z",
+  "direction": "up"
+}
+```
+
+  `direction` is one of `"up"`, `"down"`, or `"flat"`.
+
+- The **price cache** holds `{price, prev_price, open_price, timestamp, direction}` per ticker. `open_price` is the seed price at session start and is the baseline for "daily change %" calculations on the frontend.
 - Client handles reconnection automatically (EventSource has built-in retry)
 
 ---
@@ -225,7 +243,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 - `price` REAL
 - `executed_at` TEXT (ISO timestamp)
 
-**portfolio_snapshots** — Portfolio value over time (for P&L chart). Recorded every 30 seconds by a background task, and immediately after each trade execution.
+**portfolio_snapshots** — Portfolio value over time (for P&L chart). Owned by the **portfolio module**. Recorded at three points: (1) once immediately when the database is first initialized (`total_value = 10000.0`), (2) on a repeating interval configured by `PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS` (default 60s), and (3) immediately after each trade execution.
 - `id` TEXT PRIMARY KEY (UUID)
 - `user_id` TEXT (default: `"default"`)
 - `total_value` REAL
@@ -236,13 +254,19 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 - `user_id` TEXT (default: `"default"`)
 - `role` TEXT (`"user"` or `"assistant"`)
 - `content` TEXT
-- `actions` TEXT (JSON — trades executed, watchlist changes made; null for user messages)
+- `actions` TEXT (JSON — the **backend-enriched** post-execution result: array of trade and watchlist_change objects with `status`, `price`, `executed_at`, `error` fields; null for user messages and assistant messages with no actions)
 - `created_at` TEXT (ISO timestamp)
 
 ### Default Seed Data
 
 - One user profile: `id="default"`, `cash_balance=10000.0`
 - Ten watchlist entries: AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX
+
+### Implementation Notes
+
+- **`user_id` access**: All DB helper/repository functions accept `user_id` as a parameter defaulting to `"default"`. Raw SQL queries never hard-code `"default"` inline — the repository layer owns that default.
+- **Position update semantics**: Sells update the `positions` row in-place (decrement `quantity`, leave `avg_cost` unchanged). The row is deleted only when `quantity` reaches exactly zero. A sell on a ticker with no position row returns the same validation error as selling more than owned.
+- **`avg_cost` on buy**: Weighted average — `(old_qty * old_avg_cost + new_qty * new_price) / (old_qty + new_qty)`. No change to `avg_cost` on sells.
 
 ---
 
@@ -267,9 +291,25 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 | POST | `/api/watchlist` | Add a ticker: `{ticker}` |
 | DELETE | `/api/watchlist/{ticker}` | Remove a ticker |
 
+`GET /api/watchlist` returns an array of objects:
+```json
+[
+  {
+    "ticker": "AAPL",
+    "price": 191.50,
+    "prev_price": 191.32,
+    "open_price": 190.00,
+    "direction": "up",
+    "timestamp": "2026-04-10T12:00:00.500Z"
+  }
+]
+```
+`price`, `prev_price`, `open_price`, `direction`, and `timestamp` are `null` for tickers added so recently that no cache entry exists yet. The frontend must handle nulls gracefully.
+
 ### Chat
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/chat/history` | Last 20 chat messages for the user (for restoring conversation on page load) |
 | POST | `/api/chat` | Send a message, receive complete JSON response (message + executed actions) |
 
 ### System
@@ -300,7 +340,7 @@ When the user sends a chat message, the backend:
 
 ### Structured Output Schema
 
-The LLM is instructed to respond with JSON matching this schema:
+**LLM output** (what the model returns — minimal, clean):
 
 ```json
 {
@@ -316,7 +356,39 @@ The LLM is instructed to respond with JSON matching this schema:
 
 - `message` (required): The conversational text shown to the user
 - `trades` (optional): Array of trades to auto-execute. Each trade goes through the same validation as manual trades (sufficient cash for buys, sufficient shares for sells)
-- `watchlist_changes` (optional): Array of watchlist modifications
+- `watchlist_changes` (optional): Array of watchlist modifications. `action` is `"add"` or `"remove"`.
+
+**API response** (what `POST /api/chat` returns to the frontend — backend enriches after execution):
+
+```json
+{
+  "message": "Bought 10 AAPL at $191.50.",
+  "trades": [
+    {
+      "ticker": "AAPL",
+      "side": "buy",
+      "quantity": 10,
+      "status": "executed",
+      "price": 191.50,
+      "notional": 1915.00,
+      "executed_at": "2026-04-10T12:00:00.500Z",
+      "error": null
+    }
+  ],
+  "watchlist_changes": [
+    {
+      "ticker": "PYPL",
+      "action": "add",
+      "status": "executed",
+      "error": null
+    }
+  ]
+}
+```
+
+Failed items use the same shape: `status: "rejected"`, `price`/`notional`/`executed_at` set to `null`, `error` populated with a human-readable string. **Failed items are never stripped from the arrays** — the frontend renders them inline as attempted-but-failed actions. This enriched shape is also what is stored in `chat_messages.actions`.
+
+The LLM context includes the **last 20 `chat_messages` rows** from the database.
 
 ### Auto-Execution
 
@@ -325,7 +397,7 @@ Trades specified by the LLM execute automatically — no confirmation dialog. Th
 - It creates an impressive, fluid demo experience
 - It demonstrates agentic AI capabilities — the core theme of the course
 
-If a trade fails validation (e.g., insufficient cash), the error is included in the chat response so the LLM can inform the user.
+If a trade fails validation (e.g., insufficient cash), it remains in the `trades` array with `status: "rejected"` and a populated `error` field so the frontend can render it inline.
 
 ### System Prompt Guidance
 
@@ -344,6 +416,29 @@ When `LLM_MOCK=true`, the backend returns deterministic mock responses instead o
 - Development without an API key
 - CI/CD pipelines
 
+The pinned mock response (stored in `test/fixtures/llm_mock_response.json` and used by both backend and E2E tests):
+
+```json
+{
+  "message": "Bought 10 AAPL at $185.25.",
+  "trades": [
+    {
+      "ticker": "AAPL",
+      "side": "buy",
+      "quantity": 10,
+      "status": "executed",
+      "price": 185.25,
+      "notional": 1852.50,
+      "executed_at": "2026-01-01T00:00:00.000Z",
+      "error": null
+    }
+  ],
+  "watchlist_changes": []
+}
+```
+
+For rejected trades in mock mode, use `status: "rejected"`, `price: null`, `notional: null`, `executed_at: null`, and a non-null `error` string.
+
 ---
 
 ## 10. Frontend Design
@@ -352,8 +447,8 @@ When `LLM_MOCK=true`, the backend returns deterministic mock responses instead o
 
 The frontend is a single-page application with a dense, terminal-inspired layout. The specific component architecture and layout system is up to the Frontend Engineer, but the UI should include these elements:
 
-- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from SSE since page load)
-- **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here.
+- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), "daily change %" (computed as `(price - open_price) / open_price * 100` where `open_price` is the session-start seed price from the SSE event), and a sparkline mini-chart (accumulated from SSE since page load)
+- **Main chart area** — larger chart for the currently selected ticker showing price over time, **data accumulated from the SSE stream since page load** (same data as sparklines, no separate historical API). Clicking a ticker in the watchlist selects it here.
 - **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by P&L (green = profit, red = loss)
 - **P&L chart** — line chart showing total portfolio value over time, using data from `portfolio_snapshots`
 - **Positions table** — tabular view of all positions: ticker, quantity, avg cost, current price, unrealized P&L, % change
@@ -368,6 +463,7 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 - Price flash effect: on receiving a new price, briefly apply a CSS class with background color transition, then remove it
 - All API calls go to the same origin (`/api/*`) — no CORS configuration needed
 - Tailwind CSS for styling with a custom dark theme
+- **Route constraint**: Next.js `output: 'export'` prohibits SSR-style dynamic routes. For v1, all navigation uses a single static page with client-side state or query params (e.g., `?ticker=AAPL`). No `getServerSideProps`, no per-ticker static paths.
 
 ---
 
@@ -390,6 +486,17 @@ Stage 2: Python 3.12 slim
 ```
 
 FastAPI serves the static frontend files and all API routes on port 8000.
+
+### Deployment Contract
+
+| Item | Value |
+|------|-------|
+| Next.js build output | `frontend/out/` |
+| Copied into container at | `/app/static/` |
+| FastAPI static mount | `StaticFiles(directory="/app/static", html=True)` mounted at path `/` |
+| `/_next/` assets | Served automatically by `StaticFiles` (no special config needed) |
+| SPA fallback | A catch-all route (`@app.get("/{full_path:path}")`) placed **after** all `/api/` routes returns `index.html` for any path not matched by the static file mount |
+| API routes | All mounted under `/api/` — matched before the static mount and catch-all |
 
 ### Docker Volume
 
@@ -454,3 +561,35 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Resolved Decisions
+
+All items below have been incorporated into the relevant sections above. This section is a traceability index only.
+
+| Decision | Incorporated Into |
+|----------|-------------------|
+| Watchlist is the canonical ticker source; simulation stops immediately on removal | §6 Simulator, §6 SSE Streaming |
+| New tickers not in seed list start at $100.00 with standard volatility | §6 Simulator |
+| Portfolio module owns the snapshot background task | §7 portfolio_snapshots |
+| Snapshot interval configurable via `PORTFOLIO_SNAPSHOT_INTERVAL_SECONDS` (default 60s) | §5, §7 |
+| Initial snapshot inserted at DB initialization ($10,000, no positions) | §7 portfolio_snapshots |
+| Single update loop drives both simulation and SSE (no two independent timers) | §6 Simulator |
+| SSE event field names pinned: `ticker, price, prev_price, open_price, timestamp, direction` | §6 SSE Streaming |
+| `daily change %` = `(price - open_price) / open_price * 100` using session-start seed | §6 SSE, §10 Watchlist |
+| Main chart uses SSE-accumulated data (no historical API endpoint for v1) | §10 Main chart |
+| LLM returns minimal schema; backend enriches with `status/price/notional/executed_at/error` | §9 Structured Output |
+| Failed trades stay in `trades` array with `status: "rejected"` — never stripped | §9 Auto-Execution |
+| `watchlist_changes` enriched with `status` and `error` in API response | §9 Structured Output |
+| LLM mock fixture pinned in `test/fixtures/llm_mock_response.json` (snake_case fields) | §9 LLM Mock Mode |
+| LLM context window: last 20 `chat_messages` rows | §9 Structured Output |
+| Position sells: update in-place; delete row only at exactly zero quantity | §7 Implementation Notes |
+| Sell on missing position row: same error as insufficient shares | §7 Implementation Notes |
+| `avg_cost`: weighted average on buy; unchanged on sell | §7 Implementation Notes |
+| `user_id` hidden behind repository functions; never hard-coded in raw queries | §7 Implementation Notes |
+| `chat_messages.actions` stores backend-enriched post-execution result | §7 chat_messages |
+| `GET /api/watchlist` returns `null` price fields for newly added tickers | §8 Watchlist |
+| `GET /api/chat/history` endpoint added (last 20 messages for page load restore) | §8 Chat |
+| No SSR dynamic routes; use query params (e.g., `?ticker=AAPL`) | §10 Technical Notes |
+| Deployment contract defined: `frontend/out/` → `/app/static/`, SPA fallback catch-all | §11 Deployment Contract |

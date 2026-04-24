@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(codex exec:*)",
+      "WebSearch",
+      "WebFetch(domain:polygon.io)",
+      "WebFetch(domain:massive.com)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)",
+      "Bash(uv run:*)",
+      "Bash(git pull:*)",
+      "Bash(gh api:*)"
+    ]
+  }
+}

@@ -14,26 +14,28 @@ from .cache import PriceCache
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/stream", tags=["streaming"])
-
 
 def create_stream_router(price_cache: PriceCache) -> APIRouter:
     """Create the SSE streaming router with a reference to the price cache.
 
-    This factory pattern lets us inject the PriceCache without globals.
+    Returns a fresh APIRouter each call so the function is safe to call
+    multiple times (e.g. in tests) without registering duplicate routes.
     """
+    router = APIRouter(prefix="/api/stream", tags=["streaming"])
 
     @router.get("/prices")
     async def stream_prices(request: Request) -> StreamingResponse:
         """SSE endpoint for live price updates.
 
-        Streams all tracked ticker prices every ~500ms. The client connects
-        with EventSource and receives events in the format:
+        Streams one event per ticker every ~500ms. Each event is a JSON
+        object for a single ticker (per PLAN.md §6):
 
-            data: {"AAPL": {"ticker": "AAPL", "price": 190.50, ...}, ...}
+            data: {"ticker":"AAPL","price":190.50,"prev_price":190.42,
+                   "open_price":190.00,"timestamp":"2026-04-10T12:00:00.500Z",
+                   "direction":"up"}
 
         Includes a retry directive so the browser auto-reconnects on
-        disconnection (EventSource built-in behavior).
+        disconnection (EventSource built-in behaviour).
         """
         return StreamingResponse(
             _generate_events(price_cache, request),
@@ -55,8 +57,8 @@ async def _generate_events(
 ) -> AsyncGenerator[str, None]:
     """Async generator that yields SSE-formatted price events.
 
-    Sends all prices every `interval` seconds. Stops when the client
-    disconnects (detected via request.is_disconnected()).
+    Sends one event per ticker every `interval` seconds. Stops when the
+    client disconnects (detected via request.is_disconnected()).
     """
     # Tell the client to retry after 1 second if the connection drops
     yield "retry: 1000\n\n"
@@ -76,10 +78,8 @@ async def _generate_events(
             if current_version != last_version:
                 last_version = current_version
                 prices = price_cache.get_all()
-
-                if prices:
-                    data = {ticker: update.to_dict() for ticker, update in prices.items()}
-                    payload = json.dumps(data)
+                for update in prices.values():
+                    payload = json.dumps(update.to_dict())
                     yield f"data: {payload}\n\n"
 
             await asyncio.sleep(interval)

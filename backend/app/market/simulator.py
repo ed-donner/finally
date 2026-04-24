@@ -15,6 +15,7 @@ from .seed_prices import (
     CORRELATION_GROUPS,
     CROSS_GROUP_CORR,
     DEFAULT_PARAMS,
+    DEFAULT_SEED_PRICE,
     INTRA_FINANCE_CORR,
     INTRA_TECH_CORR,
     SEED_PRICES,
@@ -148,7 +149,7 @@ class GBMSimulator:
         if ticker in self._prices:
             return
         self._tickers.append(ticker)
-        self._prices[ticker] = SEED_PRICES.get(ticker, random.uniform(50.0, 300.0))
+        self._prices[ticker] = SEED_PRICES.get(ticker, DEFAULT_SEED_PRICE)
         self._params[ticker] = TICKER_PARAMS.get(ticker, dict(DEFAULT_PARAMS))
 
     def _rebuild_cholesky(self) -> None:
