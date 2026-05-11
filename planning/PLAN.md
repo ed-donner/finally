@@ -454,3 +454,52 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Review Notes
+
+### Questions & Clarifications
+
+**Section 6 — SSE cadence vs Massive API poll rate mismatch**
+The SSE stream pushes at ~500ms, but the Massive free tier only refreshes data every 15 seconds. The plan doesn't specify what the SSE push rate should be in Massive mode — should it slow to match the poll interval, or continue pushing the (stale) cached price at 500ms? Agents implementing the SSE layer need a clear answer here.
+
+**Section 6 — Watchlist removal and price cache cleanup**
+"Pushes updates for all tickers known to the system" — but what happens when a user removes a ticker from the watchlist? Does the simulator keep generating prices for it? Does the cache evict it? If not, removed tickers may accumulate in the cache indefinitely. The plan should specify whether the cache is bounded to the current watchlist.
+
+**Section 7 — Lazy initialization: startup or first request?**
+"The backend checks for the SQLite database on startup (or first request)" — these have different failure modes. If it's first request, a slow initial request is expected. If it's startup, the app may be unready for a moment after the container starts. Pick one and document it clearly; Docker healthcheck behavior depends on this.
+
+**Section 7 — `backend/db/` vs top-level `db/`**
+Two directories named `db/` at different levels serve entirely different purposes: `backend/db/` holds schema SQL and seed logic (code); top-level `db/` is the runtime volume mount (data). Agents may conflate these. Consider renaming `backend/db/` to `backend/schema/` or `backend/migrations/` to eliminate the ambiguity.
+
+**Section 9 — "Use cerebras-inference skill" is an agent instruction, not Python code**
+This line reads as if the Python code should call a "skill." It should be clearly marked as an instruction to the coding agent (e.g., prefix with `[Agent instruction]`), not something that ends up in the implementation.
+
+**Section 9 — Conversation history truncation strategy**
+"Loads recent conversation history" doesn't specify how many messages or a token budget. Without a cap, long sessions will overflow the LLM's context window. The implementation should define a rolling window (e.g., last 20 messages) and this should be specified here.
+
+**Section 10 — "Daily change %" source in simulator mode**
+The watchlist panel shows daily change %, but the simulator has no concept of a market open/previous close — it just walks from seed prices. Should this be "change since simulator start," "change since page load," or something else? This needs to be pinned so the SSE event payload and frontend calculation agree.
+
+**Section 8 — No REST endpoint for current prices**
+The only way to get live prices is via SSE. On page load, before SSE connects, the frontend has no prices to display. `GET /api/watchlist` returns "latest prices" (good), but `GET /api/portfolio` returning positions doesn't mention current prices. Confirm whether the portfolio endpoint includes current prices, or whether the frontend is expected to hold off rendering P&L until SSE delivers the first tick.
+
+---
+
+### Simplification Opportunities
+
+**`portfolio_snapshots` growth is unbounded**
+Recording every 30 seconds with no retention policy means ~2,880 rows/day. For a demo app this is fine, but the `GET /api/portfolio/history` endpoint will return all rows unless limited. Add a `?limit=N` query param or a fixed retention window (e.g., last 24 hours) so the frontend P&L chart doesn't receive thousands of points.
+
+**`docker-compose.yml` vs start scripts — pick one as canonical**
+The directory structure lists `docker-compose.yml` as an "optional convenience wrapper" but Section 11 only documents the shell scripts. Students will naturally reach for `docker-compose up`. Either document the compose file in Section 11 or remove it from the directory tree to reduce confusion.
+
+**SSE pushes all tickers unconditionally at 500ms**
+This is fine for 10 tickers (tiny payload). Documenting explicitly that the server always pushes the full watchlist snapshot rather than delta events would head off agents adding unnecessary delta-tracking complexity.
+
+**`chat_messages.actions` TEXT column is for display only**
+Storing executed actions as a JSON blob in a TEXT column is appropriate for single-user display purposes, but it's worth clarifying in the schema docs that this column is never re-parsed for execution — it's a read-only audit trail for the UI. Without this note an agent might try to build a replay mechanism against it.
+
+**`npm install` in Dockerfile should be `npm ci`**
+The multi-stage build uses `npm install`, which can produce non-reproducible output if `package-lock.json` diverges. `npm ci` is the correct command for CI/Docker contexts. Minor, but worth fixing to avoid subtle build differences between environments.
