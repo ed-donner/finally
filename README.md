@@ -1,62 +1,81 @@
 # FinAlly — AI Trading Workstation
 
-A visually stunning AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM chat assistant that can analyze positions and execute trades via natural language.
+A visually stunning AI-powered trading workstation built as a capstone project for an agentic AI coding course. Streams live market data, supports simulated portfolio trading, and includes an LLM chat assistant that can analyze positions and execute trades via natural language.
 
-Built entirely by coding agents as a capstone project for an agentic AI coding course.
+**Built entirely by AI coding agents.**
 
-## Features
+---
 
-- **Live price streaming** via SSE with green/red flash animations
-- **Simulated portfolio** — $10k virtual cash, market orders, instant fills
-- **Portfolio visualizations** — heatmap (treemap), P&L chart, positions table
-- **AI chat assistant** — analyzes holdings, suggests and auto-executes trades
-- **Watchlist management** — track tickers manually or via AI
-- **Dark terminal aesthetic** — Bloomberg-inspired, data-dense layout
+## What It Does
 
-## Architecture
+- **Live price streaming** — prices flash green/red on tick via SSE, with sparkline mini-charts
+- **Simulated trading** — $10,000 virtual cash, instant market-order fills, no fees
+- **Portfolio visualization** — treemap heatmap sized by weight and colored by P&L, plus a P&L history chart
+- **AI chat assistant** — ask about your portfolio, get analysis, have the AI execute trades and manage your watchlist
 
-Single Docker container serving everything on port 8000:
+## Tech Stack
 
-- **Frontend**: Next.js (static export) with TypeScript and Tailwind CSS
-- **Backend**: FastAPI (Python/uv) with SSE streaming
-- **Database**: SQLite with lazy initialization
-- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
-- **Market data**: Built-in GBM simulator (default) or Massive API (optional)
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js (TypeScript, static export) |
+| Backend | FastAPI + Python (managed via `uv`) |
+| Database | SQLite (lazy-initialized, volume-mounted) |
+| Real-time | Server-Sent Events (SSE) |
+| AI | LiteLLM → OpenRouter (Cerebras inference) |
+| Market data | Built-in GBM simulator (or Massive API with key) |
+| Deployment | Single Docker container, port 8000 |
 
 ## Quick Start
 
+> Requires Docker and an OpenRouter API key.
+
 ```bash
-# Clone and configure
+# 1. Copy and fill in env vars
 cp .env.example .env
 # Add your OPENROUTER_API_KEY to .env
 
-# Run with Docker
-docker build -t finally .
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
+# 2. Start the app
+./scripts/start_mac.sh        # macOS/Linux
+.\scripts\start_windows.ps1   # Windows PowerShell
 
-# Open http://localhost:8000
+# 3. Open http://localhost:8000
 ```
+
+To stop: `./scripts/stop_mac.sh`
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
-| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
+```bash
+# Required
+OPENROUTER_API_KEY=your-key-here
+
+# Optional — omit to use the built-in market simulator
+MASSIVE_API_KEY=
+
+# Optional — set to "true" for deterministic mock LLM responses (E2E tests)
+LLM_MOCK=false
+```
 
 ## Project Structure
 
 ```
 finally/
-├── frontend/    # Next.js static export
-├── backend/     # FastAPI uv project
-├── planning/    # Project documentation and agent contracts
-├── test/        # Playwright E2E tests
-├── db/          # SQLite volume mount (runtime)
-└── scripts/     # Start/stop helpers
+├── frontend/          # Next.js TypeScript app (static export)
+├── backend/           # FastAPI uv project
+│   └── db/            # Schema SQL and seed logic
+├── planning/          # Agent documentation and project spec
+│   └── PLAN.md        # Full project specification
+├── scripts/           # Start/stop Docker scripts
+├── test/              # Playwright E2E tests
+├── db/                # Runtime volume mount (SQLite file written here)
+└── Dockerfile         # Multi-stage build (Node → Python)
 ```
 
-## License
+## For Contributors / Agents
 
-See [LICENSE](LICENSE).
+All project documentation lives in `planning/`. Start with [`planning/PLAN.md`](planning/PLAN.md) — it is the authoritative spec for architecture, API contracts, data schema, and design decisions.
+
+Key boundaries:
+- `frontend/` and `backend/` are self-contained projects that communicate only via `/api/*` and `/api/stream/*`
+- The backend owns all database logic, SSE streaming, market data, and LLM integration
+- The frontend is a pure static export — no SSR, no server components
