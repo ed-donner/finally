@@ -1,81 +1,83 @@
 # FinAlly — AI Trading Workstation
 
-A visually stunning AI-powered trading workstation built as a capstone project for an agentic AI coding course. Streams live market data, supports simulated portfolio trading, and includes an LLM chat assistant that can analyze positions and execute trades via natural language.
+A visually stunning, AI-powered trading terminal. Stream live market data, manage a simulated portfolio, and chat with an AI assistant that can analyze positions and execute trades on your behalf.
 
-**Built entirely by AI coding agents.**
+![Dark terminal aesthetic inspired by Bloomberg]
 
----
+## Features
 
-## What It Does
-
-- **Live price streaming** — prices flash green/red on tick via SSE, with sparkline mini-charts
-- **Simulated trading** — $10,000 virtual cash, instant market-order fills, no fees
-- **Portfolio visualization** — treemap heatmap sized by weight and colored by P&L, plus a P&L history chart
-- **AI chat assistant** — ask about your portfolio, get analysis, have the AI execute trades and manage your watchlist
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js (TypeScript, static export) |
-| Backend | FastAPI + Python (managed via `uv`) |
-| Database | SQLite (lazy-initialized, volume-mounted) |
-| Real-time | Server-Sent Events (SSE) |
-| AI | LiteLLM → OpenRouter (Cerebras inference) |
-| Market data | Built-in GBM simulator (or Massive API with key) |
-| Deployment | Single Docker container, port 8000 |
+- **Live price streaming** — prices flash green/red on every tick via SSE
+- **Sparkline mini-charts** — per-ticker price history built in real time from the stream
+- **Simulated portfolio** — $10,000 virtual cash, instant market orders, no fees
+- **Portfolio heatmap** — treemap sized by position weight, colored by P&L
+- **AI chat assistant** — ask about your portfolio; the AI can execute trades and manage your watchlist through natural language
+- **Watchlist management** — add/remove tickers manually or via AI chat
 
 ## Quick Start
 
-> Requires Docker and an OpenRouter API key.
-
 ```bash
-# 1. Copy and fill in env vars
+# Copy environment config
 cp .env.example .env
-# Add your OPENROUTER_API_KEY to .env
+# Add your OpenRouter API key to .env (required for AI chat)
+# MASSIVE_API_KEY is optional — simulator runs by default
 
-# 2. Start the app
-./scripts/start_mac.sh        # macOS/Linux
-.\scripts\start_windows.ps1   # Windows PowerShell
-
-# 3. Open http://localhost:8000
+# Build and run
+docker build -t finally .
+docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
 ```
 
-To stop: `./scripts/stop_mac.sh`
+Open [http://localhost:8000](http://localhost:8000).
 
 ## Environment Variables
 
+| Variable | Required | Description |
+|---|---|---|
+| `OPENROUTER_API_KEY` | Yes | OpenRouter key for LLM chat |
+| `MASSIVE_API_KEY` | No | Real market data via Massive API (simulator used if absent) |
+| `LLM_MOCK` | No | Set `true` for deterministic mock responses (testing) |
+
+## Architecture
+
+```
+Single container on port 8000
+├── FastAPI — REST + SSE endpoints
+├── Next.js static export — served by FastAPI
+├── SQLite — zero-config persistence (volume-mounted)
+└── LiteLLM → OpenRouter (Cerebras) — structured AI responses
+```
+
+- **Frontend**: Next.js + TypeScript (static export, no CORS)
+- **Backend**: FastAPI, managed with `uv`
+- **Real-time**: Server-Sent Events (`/api/stream/prices`)
+- **Market data**: GBM simulator (default) or Massive REST API
+
+## Development
+
+### Backend
 ```bash
-# Required
-OPENROUTER_API_KEY=your-key-here
-
-# Optional — omit to use the built-in market simulator
-MASSIVE_API_KEY=
-
-# Optional — set to "true" for deterministic mock LLM responses (E2E tests)
-LLM_MOCK=false
+cd backend
+uv sync
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
-## Project Structure
-
-```
-finally/
-├── frontend/          # Next.js TypeScript app (static export)
-├── backend/           # FastAPI uv project
-│   └── db/            # Schema SQL and seed logic
-├── planning/          # Agent documentation and project spec
-│   └── PLAN.md        # Full project specification
-├── scripts/           # Start/stop Docker scripts
-├── test/              # Playwright E2E tests
-├── db/                # Runtime volume mount (SQLite file written here)
-└── Dockerfile         # Multi-stage build (Node → Python)
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-## For Contributors / Agents
+## Testing
 
-All project documentation lives in `planning/`. Start with [`planning/PLAN.md`](planning/PLAN.md) — it is the authoritative spec for architecture, API contracts, data schema, and design decisions.
+```bash
+# Unit tests
+cd backend && uv run pytest
+cd frontend && npm test
 
-Key boundaries:
-- `frontend/` and `backend/` are self-contained projects that communicate only via `/api/*` and `/api/stream/*`
-- The backend owns all database logic, SSE streaming, market data, and LLM integration
-- The frontend is a pure static export — no SSR, no server components
+# E2E (Playwright, requires Docker)
+cd test && docker compose -f docker-compose.test.yml up
+```
+
+## License
+
+MIT

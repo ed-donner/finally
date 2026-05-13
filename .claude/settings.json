@@ -1,7 +1,17 @@
 {
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codex exec \"Review changes since last commit and write result to a file named planning/REVIEW.md\""
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
-    "frontend-design@claude-plugins-official": true,
-    "context7@claude-plugins-official": true,
-    "playwright@claude-plugins-official": true
+    "independent-reviewer@sanamjan-tools": true
   }
 }
