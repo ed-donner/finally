@@ -1,57 +1,51 @@
-"""Abstract interface for market data sources."""
-
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
+from .models import PriceUpdate, DailyBar
 
 
 class MarketDataSource(ABC):
-    """Contract for market data providers.
+    """Abstract base class for all market data sources.
 
-    Implementations push price updates into a shared PriceCache on their own
-    schedule. Downstream code never calls the data source directly for prices —
-    it reads from the cache.
-
-    Lifecycle:
-        source = create_market_data_source(cache)
-        await source.start(["AAPL", "GOOGL", ...])
-        # ... app runs ...
-        await source.add_ticker("TSLA")
-        await source.remove_ticker("GOOGL")
-        # ... app shutting down ...
-        await source.stop()
+    Concrete implementations: MassiveClient, MarketSimulator.
+    Neither should be used directly outside backend/app/market/.
+    All external code reads from PriceCache.
     """
 
     @abstractmethod
     async def start(self, tickers: list[str]) -> None:
-        """Begin producing price updates for the given tickers.
+        """Start the background polling/simulation loop.
 
-        Starts a background task that periodically writes to the PriceCache.
-        Must be called exactly once. Calling start() twice is undefined behavior.
+        Args:
+            tickers: Initial list of ticker symbols to track.
         """
+        ...
 
     @abstractmethod
     async def stop(self) -> None:
-        """Stop the background task and release resources.
-
-        Safe to call multiple times. After stop(), the source will not write
-        to the cache again.
-        """
+        """Gracefully shut down the background task."""
+        ...
 
     @abstractmethod
-    async def add_ticker(self, ticker: str) -> None:
-        """Add a ticker to the active set. No-op if already present.
-
-        The next update cycle will include this ticker.
-        """
+    def add_ticker(self, ticker: str) -> None:
+        """Register a new ticker to be tracked on the next poll cycle."""
+        ...
 
     @abstractmethod
-    async def remove_ticker(self, ticker: str) -> None:
-        """Remove a ticker from the active set. No-op if not present.
-
-        Also removes the ticker from the PriceCache.
-        """
+    def remove_ticker(self, ticker: str) -> None:
+        """Deregister a ticker. Its entry remains in cache until overwritten."""
+        ...
 
     @abstractmethod
-    def get_tickers(self) -> list[str]:
-        """Return the current list of actively tracked tickers."""
+    async def get_daily_bars(
+        self, ticker: str, from_date: str, to_date: str
+    ) -> list[DailyBar]:
+        """Fetch historical daily OHLCV bars.
+
+        Args:
+            ticker: Ticker symbol.
+            from_date: ISO date string YYYY-MM-DD.
+            to_date: ISO date string YYYY-MM-DD.
+
+        Returns:
+            List of DailyBar sorted ascending by date.
+        """
+        ...
