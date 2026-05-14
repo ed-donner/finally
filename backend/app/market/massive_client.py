@@ -1,128 +1,136 @@
-"""Massive (Polygon.io) API client for real market data."""
-
-from __future__ import annotations
-
 import asyncio
 import logging
+import httpx
+from datetime import datetime, timezone
 
-from massive import RESTClient
-from massive.rest.models import SnapshotMarketType
-
-from .cache import PriceCache
 from .interface import MarketDataSource
+from .cache import PriceCache
+from .models import PriceUpdate, DailyBar
 
 logger = logging.getLogger(__name__)
 
+BASE_URL = "https://api.massive.com"
 
-class MassiveDataSource(MarketDataSource):
-    """MarketDataSource backed by the Massive (Polygon.io) REST API.
 
-    Polls GET /v2/snapshot/locale/us/markets/stocks/tickers for all watched
-    tickers in a single API call, then writes results to the PriceCache.
+class MassiveClient(MarketDataSource):
+    """Polls the Massive (formerly Polygon.io) REST snapshot endpoint.
 
-    Rate limits:
-      - Free tier: 5 req/min → poll every 15s (default)
-      - Paid tiers: higher limits → poll every 2-5s
+    Poll interval:
+      - Free tier (5 req/min): set poll_interval=15.0
+      - Paid tiers (unlimited): set poll_interval=2.0–5.0
     """
 
-    def __init__(
-        self,
-        api_key: str,
-        price_cache: PriceCache,
-        poll_interval: float = 15.0,
-    ) -> None:
+    def __init__(self, api_key: str, cache: PriceCache, poll_interval: float = 15.0) -> None:
         self._api_key = api_key
-        self._cache = price_cache
-        self._interval = poll_interval
-        self._tickers: list[str] = []
+        self._cache = cache
+        self._poll_interval = poll_interval
+        self._tickers: set[str] = set()
         self._task: asyncio.Task | None = None
-        self._client: RESTClient | None = None
+        self._headers = {"Authorization": f"Bearer {api_key}"}
 
     async def start(self, tickers: list[str]) -> None:
-        self._client = RESTClient(api_key=self._api_key)
-        self._tickers = list(tickers)
-
-        # Do an immediate first poll so the cache has data right away
-        await self._poll_once()
-
-        self._task = asyncio.create_task(self._poll_loop(), name="massive-poller")
-        logger.info(
-            "Massive poller started: %d tickers, %.1fs interval",
-            len(tickers),
-            self._interval,
-        )
+        self._tickers = set(t.upper() for t in tickers)
+        self._task = asyncio.create_task(self._poll_loop())
+        logger.info("MassiveClient started, polling every %.1fs", self._poll_interval)
 
     async def stop(self) -> None:
-        if self._task and not self._task.done():
+        if self._task:
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        self._task = None
-        self._client = None
-        logger.info("Massive poller stopped")
+        logger.info("MassiveClient stopped")
 
-    async def add_ticker(self, ticker: str) -> None:
-        ticker = ticker.upper().strip()
-        if ticker not in self._tickers:
-            self._tickers.append(ticker)
-            logger.info("Massive: added ticker %s (will appear on next poll)", ticker)
+    def add_ticker(self, ticker: str) -> None:
+        self._tickers.add(ticker.upper())
 
-    async def remove_ticker(self, ticker: str) -> None:
-        ticker = ticker.upper().strip()
-        self._tickers = [t for t in self._tickers if t != ticker]
-        self._cache.remove(ticker)
-        logger.info("Massive: removed ticker %s", ticker)
-
-    def get_tickers(self) -> list[str]:
-        return list(self._tickers)
-
-    # --- Internal ---
+    def remove_ticker(self, ticker: str) -> None:
+        self._tickers.discard(ticker.upper())
 
     async def _poll_loop(self) -> None:
-        """Poll on interval. First poll already happened in start()."""
-        while True:
-            await asyncio.sleep(self._interval)
-            await self._poll_once()
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            while True:
+                if self._tickers:
+                    updates = await self._fetch_snapshots(http)
+                    if updates:
+                        await self._cache.update(updates)
+                await asyncio.sleep(self._poll_interval)
 
-    async def _poll_once(self) -> None:
-        """Execute one poll cycle: fetch snapshots, update cache."""
-        if not self._tickers or not self._client:
-            return
-
+    async def _fetch_snapshots(self, http: httpx.AsyncClient) -> list[PriceUpdate]:
+        tickers_param = ",".join(sorted(self._tickers))
+        url = f"{BASE_URL}/v2/snapshot/locale/us/markets/stocks/tickers"
         try:
-            # The Massive RESTClient is synchronous — run in a thread to
-            # avoid blocking the event loop.
-            snapshots = await asyncio.to_thread(self._fetch_snapshots)
-            processed = 0
-            for snap in snapshots:
-                try:
-                    price = snap.last_trade.price
-                    # Massive timestamps are Unix milliseconds → convert to seconds
-                    timestamp = snap.last_trade.timestamp / 1000.0
-                    self._cache.update(
-                        ticker=snap.ticker,
-                        price=price,
-                        timestamp=timestamp,
-                    )
-                    processed += 1
-                except (AttributeError, TypeError) as e:
-                    logger.warning(
-                        "Skipping snapshot for %s: %s",
-                        getattr(snap, "ticker", "???"),
-                        e,
-                    )
-            logger.debug("Massive poll: updated %d/%d tickers", processed, len(self._tickers))
+            response = await http.get(
+                url,
+                params={"tickers": tickers_param},
+                headers=self._headers,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                logger.warning("Rate limited by Massive API; backing off 60s")
+                await asyncio.sleep(60)
+            elif e.response.status_code == 403:
+                logger.error("Massive API auth error (403) — check MASSIVE_API_KEY")
+            else:
+                logger.error("HTTP error %d from Massive API", e.response.status_code)
+                await asyncio.sleep(5)
+            return []
+        except httpx.RequestError as e:
+            logger.error("Network error polling Massive API: %s", e)
+            await asyncio.sleep(5)
+            return []
 
-        except Exception as e:
-            logger.error("Massive poll failed: %s", e)
-            # Don't re-raise — the loop will retry on the next interval.
-            # Common failures: 401 (bad key), 429 (rate limit), network errors.
+        return self._parse_snapshots(data)
 
-    def _fetch_snapshots(self) -> list:
-        """Synchronous call to the Massive REST API. Runs in a thread."""
-        return self._client.get_snapshot_all(
-            market_type=SnapshotMarketType.STOCKS,
-            tickers=self._tickers,
-        )
+    def _parse_snapshots(self, data: dict) -> list[PriceUpdate]:
+        updates = []
+        for t in data.get("tickers", []):
+            try:
+                last_trade = t.get("lastTrade") or {}
+                price = last_trade.get("p") or t["day"]["c"]
+                prev_price = t["prevDay"]["c"]
+                change = price - prev_price
+                change_pct = (change / prev_price * 100) if prev_price else 0.0
+                ts_ns = t.get("updated", 0)
+                timestamp = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc)
+                updates.append(PriceUpdate(
+                    ticker=t["ticker"],
+                    price=price,
+                    prev_price=prev_price,
+                    timestamp=timestamp,
+                    change=change,
+                    change_pct=change_pct,
+                ))
+            except (KeyError, TypeError, ZeroDivisionError) as e:
+                logger.warning("Failed to parse snapshot for %s: %s", t.get("ticker"), e)
+        return updates
+
+    async def get_daily_bars(self, ticker: str, from_date: str, to_date: str) -> list[DailyBar]:
+        url = f"{BASE_URL}/v2/aggs/ticker/{ticker}/range/1/day/{from_date}/{to_date}"
+        params = {"adjusted": "true", "sort": "asc", "limit": 5000}
+        async with httpx.AsyncClient(timeout=15.0) as http:
+            try:
+                response = await http.get(url, params=params, headers=self._headers)
+                response.raise_for_status()
+                data = response.json()
+            except (httpx.HTTPError, Exception) as e:
+                logger.error("Failed to fetch daily bars for %s: %s", ticker, e)
+                return []
+
+        bars = []
+        for r in data.get("results", []):
+            dt = datetime.fromtimestamp(r["t"] / 1000, tz=timezone.utc)
+            bars.append(DailyBar(
+                ticker=ticker,
+                date=dt.strftime("%Y-%m-%d"),
+                open=r["o"],
+                high=r["h"],
+                low=r["l"],
+                close=r["c"],
+                volume=int(r["v"]),
+                vwap=r.get("vw"),
+            ))
+        return bars
