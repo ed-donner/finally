@@ -1,75 +1,57 @@
-"""Thread-safe in-memory price cache."""
-
-from __future__ import annotations
-
-import time
-from threading import Lock
-
+import asyncio
 from .models import PriceUpdate
 
 
 class PriceCache:
-    """Thread-safe in-memory cache of the latest price for each ticker.
+    """Thread-safe in-memory store for the latest price of every tracked ticker.
 
-    Writers: SimulatorDataSource or MassiveDataSource (one at a time).
-    Readers: SSE streaming endpoint, portfolio valuation, trade execution.
+    The background market data task writes here; the SSE endpoint and API
+    routes read here. Reads are plain dict lookups — no locking needed because
+    CPython's GIL makes dict reads atomic. Writes use a lock to prevent
+    torn writes during bulk updates.
     """
 
     def __init__(self) -> None:
         self._prices: dict[str, PriceUpdate] = {}
-        self._lock = Lock()
-        self._version: int = 0  # Monotonically increasing; bumped on every update
+        self._lock = asyncio.Lock()
+        self._subscribers: list[asyncio.Queue] = []
 
-    def update(self, ticker: str, price: float, timestamp: float | None = None) -> PriceUpdate:
-        """Record a new price for a ticker. Returns the created PriceUpdate.
-
-        Automatically computes direction and change from the previous price.
-        If this is the first update for the ticker, previous_price == price (direction='flat').
-        """
-        with self._lock:
-            ts = timestamp or time.time()
-            prev = self._prices.get(ticker)
-            previous_price = prev.price if prev else price
-
-            update = PriceUpdate(
-                ticker=ticker,
-                price=round(price, 2),
-                previous_price=round(previous_price, 2),
-                timestamp=ts,
-            )
-            self._prices[ticker] = update
-            self._version += 1
-            return update
+    async def update(self, updates: list[PriceUpdate]) -> None:
+        async with self._lock:
+            for u in updates:
+                self._prices[u.ticker] = u
+        for queue in self._subscribers:
+            for u in updates:
+                try:
+                    queue.put_nowait(u)
+                except asyncio.QueueFull:
+                    pass  # slow consumer: drop oldest by draining one then re-putting
+                    try:
+                        queue.get_nowait()
+                        queue.put_nowait(u)
+                    except (asyncio.QueueEmpty, asyncio.QueueFull):
+                        pass
 
     def get(self, ticker: str) -> PriceUpdate | None:
-        """Get the latest price for a single ticker, or None if unknown."""
-        with self._lock:
-            return self._prices.get(ticker)
+        return self._prices.get(ticker)
 
     def get_all(self) -> dict[str, PriceUpdate]:
-        """Snapshot of all current prices. Returns a shallow copy."""
-        with self._lock:
-            return dict(self._prices)
+        return dict(self._prices)
 
-    def get_price(self, ticker: str) -> float | None:
-        """Convenience: get just the price float, or None."""
-        update = self.get(ticker)
-        return update.price if update else None
+    def get_tickers(self) -> list[str]:
+        return list(self._prices.keys())
 
-    def remove(self, ticker: str) -> None:
-        """Remove a ticker from the cache (e.g., when removed from watchlist)."""
-        with self._lock:
-            self._prices.pop(ticker, None)
+    def subscribe(self) -> asyncio.Queue:
+        """Return a queue that receives every PriceUpdate as it arrives.
 
-    @property
-    def version(self) -> int:
-        """Current version counter. Useful for SSE change detection."""
-        return self._version
+        Used by the SSE endpoint to fan out updates to connected clients.
+        """
+        queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        self._subscribers.append(queue)
+        return queue
 
-    def __len__(self) -> int:
-        with self._lock:
-            return len(self._prices)
-
-    def __contains__(self, ticker: str) -> bool:
-        with self._lock:
-            return ticker in self._prices
+    def unsubscribe(self, queue: asyncio.Queue) -> None:
+        try:
+            self._subscribers.remove(queue)
+        except ValueError:
+            pass

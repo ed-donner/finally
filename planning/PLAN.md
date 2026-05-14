@@ -454,3 +454,51 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Review Notes
+
+### Questions
+
+**Market Data & SSE**
+
+- The watchlist panel (§10) lists "daily change %" as a displayed field, but the SSE stream (§6) only provides current price, previous price, and timestamp. The simulator has no concept of a daily open. Is "daily change" meant to be intraday % since market open (unavailable in sim), % change since page load, or % change from the last tick? Needs a clear definition before implementation.
+
+- The SSE stream pushes updates for "all tickers known to the system" — but what defines "known"? If a user holds a position in a ticker they've removed from the watchlist, the portfolio P&L calculation still needs its live price. Should the price cache cover `positions ∪ watchlist`, not just the watchlist?
+
+- The simulator and SSE both run at ~500ms. Are these the same background task/timer, or two independent loops? If independent, SSE could push stale unchanged prices unnecessarily. Worth clarifying the intended design.
+
+**Frontend Data Sources**
+
+- The main chart area shows "price over time" for the selected ticker (§10), accumulated from the SSE stream in frontend memory. On page refresh this history is lost. Is that acceptable for the demo, or should the backend persist per-ticker price history and expose a `GET /api/prices/{ticker}/history` endpoint? The current plan has no such endpoint.
+
+- The P&L chart is driven by `portfolio_snapshots` (recorded every 30 seconds). On a fresh start, the chart will have no data for up to 30 seconds. Should an initial snapshot be recorded on DB seed/first startup to avoid an empty chart on first load?
+
+**API Gaps**
+
+- There is no `GET /api/trades` endpoint, but the plan describes a positions table with a trade history log. Is trade history intentionally not exposed to the frontend, or is displaying it out of scope?
+
+- What is the response shape for `POST /api/portfolio/trade`? The plan specifies the request `{ticker, quantity, side}` but not the response. Does it return the updated portfolio, the executed trade record, or just a confirmation?
+
+- `GET /api/watchlist` returns "latest prices" — what is returned for a ticker not yet in the price cache (e.g., just added and the poller hasn't run yet)? `null`? `0`? An error? This edge case should be defined.
+
+**LLM Integration**
+
+- "Loads recent conversation history" (§9) — how many messages? Unbounded history will eventually exceed the context window. Is there a defined limit (e.g., last 20 messages)?
+
+- The model `openrouter/openai/gpt-oss-120b` doesn't match any known OpenAI model name. Should this be verified — the likely intent may be `openrouter/cerebras/llama-3.3-70b` or a similar Cerebras-hosted model on OpenRouter.
+
+- Failed LLM trades ("insufficient cash" errors) are described as included in the chat response (§9). Are these also stored in the `chat_messages.actions` JSON field? Storing only successful actions is simpler, but failing to persist failed attempts could break conversation continuity.
+
+- No retry or error-handling behavior is specified for LLM API failures (rate limits, 500s from OpenRouter). Should the backend surface a user-facing error message in those cases?
+
+**Database**
+
+- The `positions` table has no DB-level constraint preventing negative `quantity`. Validation sits entirely in application code. This is acceptable but worth noting explicitly so implementers don't assume the DB enforces it.
+
+- When all shares of a position are sold, should the row be deleted from `positions` or kept at `quantity = 0`? The plan doesn't specify. Keeping zero-quantity rows simplifies trade history lookups; deleting them keeps the table clean.
+
+---
+
+

@@ -1,62 +1,83 @@
 # FinAlly — AI Trading Workstation
 
-A visually stunning AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM chat assistant that can analyze positions and execute trades via natural language.
+A visually stunning, AI-powered trading terminal. Stream live market data, manage a simulated portfolio, and chat with an AI assistant that can analyze positions and execute trades on your behalf.
 
-Built entirely by coding agents as a capstone project for an agentic AI coding course.
+![Dark terminal aesthetic inspired by Bloomberg]
 
 ## Features
 
-- **Live price streaming** via SSE with green/red flash animations
-- **Simulated portfolio** — $10k virtual cash, market orders, instant fills
-- **Portfolio visualizations** — heatmap (treemap), P&L chart, positions table
-- **AI chat assistant** — analyzes holdings, suggests and auto-executes trades
-- **Watchlist management** — track tickers manually or via AI
-- **Dark terminal aesthetic** — Bloomberg-inspired, data-dense layout
-
-## Architecture
-
-Single Docker container serving everything on port 8000:
-
-- **Frontend**: Next.js (static export) with TypeScript and Tailwind CSS
-- **Backend**: FastAPI (Python/uv) with SSE streaming
-- **Database**: SQLite with lazy initialization
-- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
-- **Market data**: Built-in GBM simulator (default) or Massive API (optional)
+- **Live price streaming** — prices flash green/red on every tick via SSE
+- **Sparkline mini-charts** — per-ticker price history built in real time from the stream
+- **Simulated portfolio** — $10,000 virtual cash, instant market orders, no fees
+- **Portfolio heatmap** — treemap sized by position weight, colored by P&L
+- **AI chat assistant** — ask about your portfolio; the AI can execute trades and manage your watchlist through natural language
+- **Watchlist management** — add/remove tickers manually or via AI chat
 
 ## Quick Start
 
 ```bash
-# Clone and configure
+# Copy environment config
 cp .env.example .env
-# Add your OPENROUTER_API_KEY to .env
+# Add your OpenRouter API key to .env (required for AI chat)
+# MASSIVE_API_KEY is optional — simulator runs by default
 
-# Run with Docker
+# Build and run
 docker build -t finally .
 docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
-
-# Open http://localhost:8000
 ```
+
+Open [http://localhost:8000](http://localhost:8000).
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
-| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
+| `OPENROUTER_API_KEY` | Yes | OpenRouter key for LLM chat |
+| `MASSIVE_API_KEY` | No | Real market data via Massive API (simulator used if absent) |
+| `LLM_MOCK` | No | Set `true` for deterministic mock responses (testing) |
 
-## Project Structure
+## Architecture
 
 ```
-finally/
-├── frontend/    # Next.js static export
-├── backend/     # FastAPI uv project
-├── planning/    # Project documentation and agent contracts
-├── test/        # Playwright E2E tests
-├── db/          # SQLite volume mount (runtime)
-└── scripts/     # Start/stop helpers
+Single container on port 8000
+├── FastAPI — REST + SSE endpoints
+├── Next.js static export — served by FastAPI
+├── SQLite — zero-config persistence (volume-mounted)
+└── LiteLLM → OpenRouter (Cerebras) — structured AI responses
+```
+
+- **Frontend**: Next.js + TypeScript (static export, no CORS)
+- **Backend**: FastAPI, managed with `uv`
+- **Real-time**: Server-Sent Events (`/api/stream/prices`)
+- **Market data**: GBM simulator (default) or Massive REST API
+
+## Development
+
+### Backend
+```bash
+cd backend
+uv sync
+uv run uvicorn app.main:app --reload --port 8000
+```
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Testing
+
+```bash
+# Unit tests
+cd backend && uv run pytest
+cd frontend && npm test
+
+# E2E (Playwright, requires Docker)
+cd test && docker compose -f docker-compose.test.yml up
 ```
 
 ## License
 
-See [LICENSE](LICENSE).
+MIT
