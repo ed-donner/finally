@@ -1,12 +1,13 @@
 """Unit tests for MassiveClient."""
 import asyncio
+import time
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import httpx
 
 from app.market.cache import PriceCache
-from app.market.massive_client import MassiveClient
+from app.market.massive_client import MassiveClient, DEFAULT_SCOPE
 from app.market.models import DailyBar, PriceUpdate
 
 
@@ -18,6 +19,83 @@ def cache():
 @pytest.fixture
 def client(cache):
     return MassiveClient(api_key="test-key", cache=cache, poll_interval=0.1)
+
+
+def make_token_response(access_token: str = "tok-abc", expires_in: int = 3600) -> MagicMock:
+    mock = MagicMock()
+    mock.json.return_value = {"access_token": access_token, "token_type": "bearer", "expires_in": expires_in}
+    mock.raise_for_status = MagicMock()
+    return mock
+
+
+# ---------------------------------------------------------------------------
+# OAuth token exchange
+# ---------------------------------------------------------------------------
+
+class TestOAuthTokenExchange:
+    @pytest.mark.asyncio
+    async def test_fetches_token_on_first_call(self, client):
+        http = AsyncMock()
+        http.post = AsyncMock(return_value=make_token_response("tok-123"))
+        await client._ensure_token(http)
+        assert client._access_token == "tok-123"
+        http.post.assert_called_once()
+        call_kwargs = http.post.call_args
+        assert call_kwargs[1]["data"]["grant_type"] == "client_credentials"
+        assert call_kwargs[1]["data"]["client_id"] == "test-key"
+        assert call_kwargs[1]["data"]["scope"] == DEFAULT_SCOPE
+
+    @pytest.mark.asyncio
+    async def test_scope_included_in_token_request(self, cache):
+        custom_client = MassiveClient(api_key="k", cache=cache, scope="custom:scope")
+        http = AsyncMock()
+        http.post = AsyncMock(return_value=make_token_response())
+        await custom_client._ensure_token(http)
+        data = http.post.call_args[1]["data"]
+        assert data["scope"] == "custom:scope"
+
+    @pytest.mark.asyncio
+    async def test_skips_token_fetch_when_not_expired(self, client):
+        client._access_token = "existing-tok"
+        client._token_expiry = time.monotonic() + 1000
+        http = AsyncMock()
+        await client._ensure_token(http)
+        http.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_refreshes_token_when_expired(self, client):
+        client._access_token = "old-tok"
+        client._token_expiry = time.monotonic() - 1  # already expired
+        http = AsyncMock()
+        http.post = AsyncMock(return_value=make_token_response("new-tok"))
+        await client._ensure_token(http)
+        assert client._access_token == "new-tok"
+
+    @pytest.mark.asyncio
+    async def test_handles_token_request_http_error(self, client):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 401
+        http = AsyncMock()
+        http.post = AsyncMock(
+            side_effect=httpx.HTTPStatusError("401", request=MagicMock(), response=mock_resp)
+        )
+        await client._ensure_token(http)
+        assert client._access_token is None
+
+    @pytest.mark.asyncio
+    async def test_handles_token_request_network_error(self, client):
+        http = AsyncMock()
+        http.post = AsyncMock(side_effect=httpx.ConnectError("timeout"))
+        await client._ensure_token(http)
+        assert client._access_token is None
+
+    def test_auth_headers_use_access_token_when_available(self, client):
+        client._access_token = "my-token"
+        client._token_expiry = time.monotonic() + 1000
+        assert client._auth_headers() == {"Authorization": "Bearer my-token"}
+
+    def test_auth_headers_fall_back_to_api_key_before_token(self, client):
+        assert client._auth_headers() == {"Authorization": "Bearer test-key"}
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +287,18 @@ class TestFetchSnapshotsErrorHandling:
 # ---------------------------------------------------------------------------
 
 class TestGetDailyBars:
+    def _make_ctx(self, get_response=None, get_side_effect=None):
+        """Return a mock httpx.AsyncClient context with token exchange pre-wired."""
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_ctx.post = AsyncMock(return_value=make_token_response())
+        if get_side_effect is not None:
+            mock_ctx.get = AsyncMock(side_effect=get_side_effect)
+        else:
+            mock_ctx.get = AsyncMock(return_value=get_response)
+        return mock_ctx
+
     @pytest.mark.asyncio
     async def test_returns_bars_on_success(self, client):
         payload = {
@@ -224,12 +314,7 @@ class TestGetDailyBars:
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.AsyncClient") as mock_client_class:
-            mock_ctx = AsyncMock()
-            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_ctx.__aexit__ = AsyncMock(return_value=False)
-            mock_ctx.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value = mock_ctx
-
+            mock_client_class.return_value = self._make_ctx(get_response=mock_response)
             bars = await client.get_daily_bars("AAPL", "2023-11-01", "2023-11-30")
 
         assert len(bars) == 2
@@ -242,12 +327,7 @@ class TestGetDailyBars:
     @pytest.mark.asyncio
     async def test_returns_empty_on_http_error(self, client):
         with patch("httpx.AsyncClient") as mock_client_class:
-            mock_ctx = AsyncMock()
-            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_ctx.__aexit__ = AsyncMock(return_value=False)
-            mock_ctx.get = AsyncMock(side_effect=httpx.ConnectError("timeout"))
-            mock_client_class.return_value = mock_ctx
-
+            mock_client_class.return_value = self._make_ctx(get_side_effect=httpx.ConnectError("timeout"))
             bars = await client.get_daily_bars("AAPL", "2023-01-01", "2023-12-31")
 
         assert bars == []
@@ -267,12 +347,7 @@ class TestGetDailyBars:
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.AsyncClient") as mock_client_class:
-            mock_ctx = AsyncMock()
-            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_ctx.__aexit__ = AsyncMock(return_value=False)
-            mock_ctx.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value = mock_ctx
-
+            mock_client_class.return_value = self._make_ctx(get_response=mock_response)
             bars = await client.get_daily_bars("AAPL", "2023-11-14", "2023-11-14")
 
         assert len(bars[0].date) == 10  # YYYY-MM-DD

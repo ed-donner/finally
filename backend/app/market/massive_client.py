@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import httpx
 from datetime import datetime, timezone
 
@@ -10,6 +11,10 @@ from .models import PriceUpdate, DailyBar
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.massive.com"
+OAUTH_TOKEN_URL = f"{BASE_URL}/oauth2/token"
+DEFAULT_SCOPE = "stocks:read"
+# Refresh the token this many seconds before it actually expires
+_TOKEN_REFRESH_BUFFER = 60
 
 
 class MassiveClient(MarketDataSource):
@@ -18,15 +23,74 @@ class MassiveClient(MarketDataSource):
     Poll interval:
       - Free tier (5 req/min): set poll_interval=15.0
       - Paid tiers (unlimited): set poll_interval=2.0–5.0
+
+    Authentication uses the OAuth 2.0 Client Credentials flow. The API key is
+    exchanged for a short-lived access token (with the required ``scope``
+    parameter) before the first request and refreshed automatically on expiry.
     """
 
-    def __init__(self, api_key: str, cache: PriceCache, poll_interval: float = 15.0) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        cache: PriceCache,
+        poll_interval: float = 15.0,
+        scope: str = DEFAULT_SCOPE,
+    ) -> None:
         self._api_key = api_key
         self._cache = cache
         self._poll_interval = poll_interval
+        self._scope = scope
         self._tickers: set[str] = set()
         self._task: asyncio.Task | None = None
-        self._headers = {"Authorization": f"Bearer {api_key}"}
+        self._access_token: str | None = None
+        self._token_expiry: float = 0.0  # epoch seconds
+
+    # ------------------------------------------------------------------
+    # OAuth helpers
+    # ------------------------------------------------------------------
+
+    def _auth_headers(self) -> dict[str, str]:
+        """Return Authorization header using the current access token."""
+        if self._access_token:
+            return {"Authorization": f"Bearer {self._access_token}"}
+        # Fallback to raw API key so requests still reach the server with a
+        # meaningful credential while the token exchange is in progress.
+        return {"Authorization": f"Bearer {self._api_key}"}
+
+    async def _ensure_token(self, http: httpx.AsyncClient) -> None:
+        """Exchange credentials for an OAuth access token if needed."""
+        if self._access_token and time.monotonic() < self._token_expiry:
+            return
+
+        try:
+            response = await http.post(
+                OAUTH_TOKEN_URL,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": self._api_key,
+                    "scope": self._scope,
+                },
+            )
+            response.raise_for_status()
+            token_data = response.json()
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                "OAuth token request failed (HTTP %d) — check MASSIVE_API_KEY",
+                e.response.status_code,
+            )
+            return
+        except httpx.RequestError as e:
+            logger.error("Network error during OAuth token exchange: %s", e)
+            return
+
+        self._access_token = token_data.get("access_token")
+        expires_in = token_data.get("expires_in", 3600)
+        self._token_expiry = time.monotonic() + float(expires_in) - _TOKEN_REFRESH_BUFFER
+        logger.debug("OAuth access token obtained (expires_in=%ss)", expires_in)
+
+    # ------------------------------------------------------------------
+    # MarketDataSource interface
+    # ------------------------------------------------------------------
 
     async def start(self, tickers: list[str]) -> None:
         self._tickers = set(t.upper() for t in tickers)
@@ -52,6 +116,7 @@ class MassiveClient(MarketDataSource):
         async with httpx.AsyncClient(timeout=10.0) as http:
             while True:
                 if self._tickers:
+                    await self._ensure_token(http)
                     updates = await self._fetch_snapshots(http)
                     if updates:
                         await self._cache.update(updates)
@@ -64,7 +129,7 @@ class MassiveClient(MarketDataSource):
             response = await http.get(
                 url,
                 params={"tickers": tickers_param},
-                headers=self._headers,
+                headers=self._auth_headers(),
             )
             response.raise_for_status()
             data = response.json()
@@ -112,8 +177,9 @@ class MassiveClient(MarketDataSource):
         url = f"{BASE_URL}/v2/aggs/ticker/{ticker}/range/1/day/{from_date}/{to_date}"
         params = {"adjusted": "true", "sort": "asc", "limit": 5000}
         async with httpx.AsyncClient(timeout=15.0) as http:
+            await self._ensure_token(http)
             try:
-                response = await http.get(url, params=params, headers=self._headers)
+                response = await http.get(url, params=params, headers=self._auth_headers())
                 response.raise_for_status()
                 data = response.json()
             except (httpx.HTTPError, Exception) as e:
