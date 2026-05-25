@@ -99,8 +99,7 @@ class MassiveDataSource(MarketDataSource):
             for snap in snapshots:
                 try:
                     price = snap.last_trade.price
-                    # Massive timestamps are Unix milliseconds → convert to seconds
-                    timestamp = snap.last_trade.timestamp / 1000.0
+                    timestamp = self._trade_timestamp_seconds(snap.last_trade)
                     self._cache.update(
                         ticker=snap.ticker,
                         price=price,
@@ -126,3 +125,16 @@ class MassiveDataSource(MarketDataSource):
             market_type=SnapshotMarketType.STOCKS,
             tickers=self._tickers,
         )
+
+    @staticmethod
+    def _trade_timestamp_seconds(last_trade) -> float | None:
+        """Extract the trade time as Unix seconds.
+
+        The snapshot's ``lastTrade.t`` maps to ``sip_timestamp``, which is a
+        Unix timestamp in nanoseconds. Returns None if unavailable, in which
+        case the cache falls back to the current wall-clock time.
+        """
+        ts_ns = getattr(last_trade, "sip_timestamp", None)
+        if ts_ns is None:
+            return None
+        return ts_ns / 1e9

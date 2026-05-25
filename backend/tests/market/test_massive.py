@@ -3,18 +3,23 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from massive.rest.models.snapshot import TickerSnapshot
 
 from app.market.cache import PriceCache
 from app.market.massive_client import MassiveDataSource
 
 
-def _make_snapshot(ticker: str, price: float, timestamp_ms: int) -> MagicMock:
-    """Create a mock Massive snapshot object."""
+def _make_snapshot(ticker: str, price: float, timestamp_ns: int) -> MagicMock:
+    """Create a mock Massive snapshot object.
+
+    ``sip_timestamp`` is the real field name on Massive's ``LastTrade`` and is
+    a Unix timestamp in nanoseconds.
+    """
     snap = MagicMock()
     snap.ticker = ticker
     snap.last_trade = MagicMock()
     snap.last_trade.price = price
-    snap.last_trade.timestamp = timestamp_ms
+    snap.last_trade.sip_timestamp = timestamp_ns
     return snap
 
 
@@ -34,8 +39,8 @@ class TestMassiveDataSource:
         source._client = MagicMock()  # Satisfy the _poll_once guard
 
         mock_snapshots = [
-            _make_snapshot("AAPL", 190.50, 1707580800000),
-            _make_snapshot("GOOGL", 175.25, 1707580800000),
+            _make_snapshot("AAPL", 190.50, 1707580800000000000),
+            _make_snapshot("GOOGL", 175.25, 1707580800000000000),
         ]
 
         with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
@@ -55,7 +60,7 @@ class TestMassiveDataSource:
         source._tickers = ["AAPL", "BAD"]
         source._client = MagicMock()  # Satisfy the _poll_once guard
 
-        good_snap = _make_snapshot("AAPL", 190.50, 1707580800000)
+        good_snap = _make_snapshot("AAPL", 190.50, 1707580800000000000)
         bad_snap = MagicMock()
         bad_snap.ticker = "BAD"
         bad_snap.last_trade = None  # Will cause AttributeError
@@ -84,7 +89,7 @@ class TestMassiveDataSource:
         assert cache.get_price("AAPL") is None  # No update happened
 
     async def test_timestamp_conversion(self):
-        """Test that timestamps are converted from milliseconds to seconds."""
+        """Test that timestamps are converted from nanoseconds to seconds."""
         cache = PriceCache()
         source = MassiveDataSource(
             api_key="test-key",
@@ -94,7 +99,7 @@ class TestMassiveDataSource:
         source._tickers = ["AAPL"]
         source._client = MagicMock()  # Satisfy the _poll_once guard
 
-        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000)]
+        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000000000)]
 
         with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
             await source._poll_once()
@@ -102,6 +107,35 @@ class TestMassiveDataSource:
         update = cache.get("AAPL")
         assert update is not None
         assert update.timestamp == 1707580800.0  # Converted to seconds
+
+    async def test_real_snapshot_shape_populates_cache(self):
+        """Regression for H-1: a real snapshot built via TickerSnapshot.from_dict
+        (not a MagicMock) must populate the cache.
+
+        MagicMock fabricates any attribute accessed, so the original code's
+        ``snap.last_trade.timestamp`` passed under mocks while raising
+        AttributeError against the real model — silently dropping every
+        snapshot in production. This pins the real field name (``sip_timestamp``)
+        and the nanosecond→second conversion.
+        """
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()  # Satisfy the _poll_once guard
+
+        # Shape matches Massive's /v2/snapshot JSON: lastTrade.p is the price,
+        # lastTrade.t is the SIP timestamp in nanoseconds.
+        real_snap = TickerSnapshot.from_dict(
+            {"ticker": "AAPL", "lastTrade": {"p": 190.50, "t": 1707580800000000000, "s": 100}}
+        )
+
+        with patch.object(source, "_fetch_snapshots", return_value=[real_snap]):
+            await source._poll_once()
+
+        update = cache.get("AAPL")
+        assert update is not None, "real-shaped snapshot was skipped (H-1 regression)"
+        assert update.price == 190.50
+        assert update.timestamp == 1707580800.0  # nanoseconds → seconds
 
     async def test_add_ticker(self):
         """Test adding a ticker."""
@@ -189,7 +223,7 @@ class TestMassiveDataSource:
         cache = PriceCache()
         source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
 
-        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000)]
+        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000000000)]
 
         with patch("app.market.massive_client.RESTClient"):
             with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
