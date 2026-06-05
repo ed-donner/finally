@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$s = git status 2>&1 | Out-String; $d = git diff HEAD 2>&1 | Out-String; $t = Get-Date -Format 'yyyy-MM-dd HH:mm'; \"# Review $t`n`n## Status`n$s`n## Diff`n$d\" | Out-File planning/REVIEW.md -Encoding utf8",
+            "shell": "powershell"
+          }
+        ]
+      }
+    ]
+  }
+}
