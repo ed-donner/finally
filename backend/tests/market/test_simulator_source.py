@@ -136,3 +136,36 @@ class TestSimulatorDataSource:
         # Just verify it starts and stops cleanly
         await asyncio.sleep(0.2)
         await source.stop()
+
+    async def test_double_start_raises(self):
+        """Calling start() twice raises rather than leaking the first task (L5)."""
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=0.1)
+        await source.start(["AAPL"])
+        with pytest.raises(RuntimeError):
+            await source.start(["GOOGL"])
+        await source.stop()
+        # After stop(), starting again is allowed.
+        await source.start(["GOOGL"])
+        await source.stop()
+
+    async def test_start_normalizes_tickers(self):
+        """Tickers passed to start() are normalized (M6)."""
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=0.1)
+        await source.start(["aapl", " googl "])
+        assert set(source.get_tickers()) == {"AAPL", "GOOGL"}
+        assert cache.get("AAPL") is not None
+        await source.stop()
+
+    async def test_health_reflects_running_state(self):
+        """health() is healthy while the loop runs, with a last_update stamp (N2)."""
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=0.05)
+        assert source.health()["healthy"] is False  # not started
+        await source.start(["AAPL"])
+        health = source.health()
+        assert health["healthy"] is True
+        assert health["last_update"] is not None
+        await source.stop()
+        assert source.health()["healthy"] is False

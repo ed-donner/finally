@@ -1,16 +1,28 @@
-"""FinAlly Market Data Simulator Demo.
+"""FinAlly Market Data Demo.
 
-Run with:  uv run market_data_demo.py
+Run with:  uv run --extra demo market_data_demo.py
 
-Displays a live-updating terminal dashboard of simulated stock prices
-using the GBM simulator and Rich library.
+A live terminal dashboard for the market-data subsystem. Compared to the
+original demo this version exercises the *current* backend API:
+
+  - ``create_market_data_source`` — auto-selects the GBM simulator or the
+    Massive (Polygon.io) feed from ``MASSIVE_API_KEY`` (shown in the header).
+  - ``PriceUpdate.day_change_percent`` — the watchlist's "daily change %"
+    (vs ``day_open``), shown alongside the per-tick flash change.
+  - ``source.health()`` — feed liveness (healthy dot + age of last update).
+  - ``PriceCache.snapshot()`` — the same atomic (version, prices) read the SSE
+    endpoint uses for change detection.
+  - Dynamic watchlist + ``normalize_ticker`` — mid-session it adds a ticker
+    typed in lowercase ("pypl" → PYPL) and removes one, live.
+
+Runs ~60s or until Ctrl+C, then prints a session summary.
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
-from collections import deque
+from collections import defaultdict, deque
 
 from rich.console import Console
 from rich.layout import Layout
@@ -19,17 +31,24 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from app.market.cache import PriceCache
+from app.market import PriceCache, create_market_data_source
+from app.market.interface import normalize_ticker
 from app.market.seed_prices import SEED_PRICES
-from app.market.simulator import SimulatorDataSource
 
 # Sparkline characters, low to high
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
 
-# Ordered ticker list matching the default watchlist
-TICKERS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "JPM", "V", "NFLX"]
+# Default watchlist (initial set).
+INITIAL_TICKERS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "JPM", "V", "NFLX"]
 
 DURATION = 60  # seconds
+
+# Scripted watchlist actions: (elapsed_seconds, action, raw_ticker).
+# The raw tickers are deliberately messy to show normalization in action.
+WATCHLIST_SCRIPT = [
+    (15.0, "add", "  pypl "),  # normalizes to PYPL
+    (30.0, "remove", "v"),     # normalizes to V
+]
 
 
 def sparkline(values: list[float]) -> str:
@@ -51,14 +70,18 @@ def format_price(price: float) -> str:
     return f"{price:.2f}"
 
 
-def build_table(
-    cache: PriceCache,
-    history: dict[str, deque],
-    elapsed: float,
-) -> Table:
-    """Build the price table."""
+def _direction_style(direction: str) -> tuple[str, str]:
+    """Map a tick direction to a (color, arrow-markup) pair."""
+    if direction == "up":
+        return "green", "[bold green]▲[/]"
+    if direction == "down":
+        return "red", "[bold red]▼[/]"
+    return "bright_black", "[bright_black]─[/]"
+
+
+def build_table(tickers: list[str], prices: dict, history: dict[str, deque]) -> Table:
+    """Build the live price table from a cache snapshot."""
     table = Table(
-        title=None,
         expand=True,
         border_style="bright_black",
         header_style="bold bright_white",
@@ -66,62 +89,76 @@ def build_table(
         padding=(0, 1),
     )
     table.add_column("Ticker", style="bold bright_white", width=8)
-    table.add_column("Price", justify="right", width=10)
-    table.add_column("Change", justify="right", width=9)
-    table.add_column("Chg %", justify="right", width=8)
+    table.add_column("Price", justify="right", width=11)
+    table.add_column("Tick", justify="right", width=8)  # per-tick flash change
     table.add_column("", width=3)  # arrow
-    table.add_column("Sparkline", width=42, no_wrap=True)
+    table.add_column("Day %", justify="right", width=9)  # vs day_open (watchlist metric)
+    table.add_column("Sparkline", width=40, no_wrap=True)
 
-    for ticker in TICKERS:
-        update = cache.get(ticker)
+    for ticker in tickers:
+        update = prices.get(ticker)
         if update is None:
-            table.add_row(ticker, "---", "---", "---", "", "")
+            table.add_row(ticker, "---", "---", "", "---", "")
             continue
 
-        # Direction styling
-        if update.direction == "up":
-            color = "green"
-            arrow = "[bold green]\u25b2[/]"
-        elif update.direction == "down":
-            color = "red"
-            arrow = "[bold red]\u25bc[/]"
-        else:
-            color = "bright_black"
-            arrow = "[bright_black]\u2500[/]"
-
+        color, arrow = _direction_style(update.direction)
         price_str = f"[{color}]${format_price(update.price)}[/]"
-        change_str = f"[{color}]{update.change:+.2f}[/]"
-        pct_str = f"[{color}]{update.change_percent:+.2f}%[/]"
+        tick_str = f"[{color}]{update.change:+.2f}[/]"
 
-        # Sparkline from history
+        # Daily change is measured against day_open, independent of the tick.
+        day_color = "green" if update.day_change_percent > 0 else (
+            "red" if update.day_change_percent < 0 else "bright_black"
+        )
+        day_str = f"[{day_color}]{update.day_change_percent:+.2f}%[/]"
+
         vals = list(history.get(ticker, []))
         spark_str = f"[bright_cyan]{sparkline(vals)}[/]" if len(vals) > 1 else ""
 
-        table.add_row(ticker, price_str, change_str, pct_str, arrow, spark_str)
+        table.add_row(ticker, price_str, tick_str, arrow, day_str, spark_str)
 
     return table
 
 
 def build_event_log(events: deque) -> Panel:
-    """Build the event log panel."""
+    """Build the event log panel (shocks + watchlist actions)."""
     text = Text()
     for evt in events:
-        text.append(evt)
+        text.append_text(Text.from_markup(evt))
         text.append("\n")
     if not events:
-        text.append("Watching for notable moves (>1% change)...", style="bright_black italic")
+        text.append(
+            "Watching for notable moves (>1% tick) and watchlist changes...",
+            style="bright_black italic",
+        )
     return Panel(
         text,
         title="[bold bright_yellow]Recent Events[/]",
         border_style="bright_black",
-        height=8,
+        height=9,
     )
 
 
+def _health_markup(health: dict) -> Text:
+    """Render the source health as a colored dot + freshness."""
+    healthy = health.get("healthy")
+    last_update = health.get("last_update")
+    if not healthy:
+        return Text.assemble(("●", "bold red"), (" unhealthy", "red"))
+    if last_update is None:
+        return Text.assemble(("●", "bold yellow"), (" starting", "yellow"))
+    age = time.time() - last_update
+    if age <= 2.0:
+        return Text.assemble(("●", "bold green"), (f" live ({age:.1f}s)", "green"))
+    return Text.assemble(("●", "bold yellow"), (f" stale ({age:.0f}s)", "yellow"))
+
+
 def build_dashboard(
-    cache: PriceCache,
+    tickers: list[str],
+    prices: dict,
     history: dict[str, deque],
     events: deque,
+    health: dict,
+    source_name: str,
     start_time: float,
 ) -> Layout:
     """Build the full dashboard layout."""
@@ -132,41 +169,45 @@ def build_dashboard(
     layout.split_column(
         Layout(name="header", size=3),
         Layout(name="body"),
-        Layout(name="footer", size=10),
+        Layout(name="footer", size=9),
     )
 
-    # Header
     header_text = Text.assemble(
         ("  FinAlly ", "bold bright_yellow"),
-        ("Market Data Simulator", "bold bright_white"),
+        ("Market Data", "bold bright_white"),
         ("  |  ", "bright_black"),
-        (f"{elapsed:5.1f}s elapsed", "bright_cyan"),
-        ("  |  ", "bright_black"),
-        (f"{remaining:4.1f}s remaining", "bright_cyan"),
-        ("  |  ", "bright_black"),
-        (f"{len(cache)} tickers", "bright_white"),
-        ("  |  ", "bright_black"),
-        ("Ctrl+C to exit", "bright_black italic"),
+        (source_name, "bold bright_magenta"),
+        ("  ", ""),
+    )
+    header_text.append_text(_health_markup(health))
+    header_text.append_text(
+        Text.assemble(
+            ("  |  ", "bright_black"),
+            (f"{elapsed:5.1f}s / {DURATION}s", "bright_cyan"),
+            ("  |  ", "bright_black"),
+            (f"{len(tickers)} tickers", "bright_white"),
+            ("  |  ", "bright_black"),
+            (f"{remaining:4.1f}s left", "bright_cyan"),
+            ("  |  ", "bright_black"),
+            ("Ctrl+C to exit", "bright_black italic"),
+        )
     )
     layout["header"].update(Panel(header_text, border_style="bright_yellow"))
 
-    # Body: price table
     layout["body"].update(
         Panel(
-            build_table(cache, history, elapsed),
-            title="[bold bright_white]Live Prices[/]",
+            build_table(tickers, prices, history),
+            title="[bold bright_white]Live Prices[/]  [bright_black](Tick = flash vs last tick · Day %% = vs day open)[/]",
             border_style="bright_black",
         )
     )
 
-    # Footer: event log
     layout["footer"].update(build_event_log(events))
-
     return layout
 
 
-def print_summary(cache: PriceCache) -> None:
-    """Print final summary comparing to seed prices."""
+def print_summary(prices: dict, tickers: list[str]) -> None:
+    """Print final summary: seed price, final price, and daily change."""
     console = Console()
     console.print()
     console.print("[bold bright_yellow]  FinAlly[/] [bold]Session Summary[/]")
@@ -174,98 +215,127 @@ def print_summary(cache: PriceCache) -> None:
 
     table = Table(border_style="bright_black", header_style="bold bright_white", expand=False)
     table.add_column("Ticker", style="bold bright_white", width=8)
-    table.add_column("Seed Price", justify="right", width=12)
-    table.add_column("Final Price", justify="right", width=12)
-    table.add_column("Session Change", justify="right", width=14)
+    table.add_column("Seed", justify="right", width=11)
+    table.add_column("Final", justify="right", width=11)
+    table.add_column("Day Open", justify="right", width=11)
+    table.add_column("Day %", justify="right", width=10)
 
-    for ticker in TICKERS:
-        seed = SEED_PRICES.get(ticker, 0)
-        update = cache.get(ticker)
+    for ticker in tickers:
+        update = prices.get(ticker)
         if update is None:
             continue
-        final = update.price
-        session_change = ((final - seed) / seed) * 100 if seed else 0
+        seed = SEED_PRICES.get(ticker)
+        seed_str = f"${format_price(seed)}" if seed else "[bright_black]—[/]"
 
-        if session_change > 0:
-            color = "green"
-        elif session_change < 0:
-            color = "red"
-        else:
-            color = "bright_black"
-
+        day_pct = update.day_change_percent
+        color = "green" if day_pct > 0 else ("red" if day_pct < 0 else "bright_black")
         table.add_row(
             ticker,
-            f"${format_price(seed)}",
-            f"[{color}]${format_price(final)}[/]",
-            f"[{color}]{session_change:+.2f}%[/]",
+            seed_str,
+            f"[{color}]${format_price(update.price)}[/]",
+            f"${format_price(update.day_open)}",
+            f"[{color}]{day_pct:+.2f}%[/]",
         )
 
     console.print(table)
     console.print()
 
 
+def _log_shock(events: deque, ticker: str, update) -> None:
+    """Append a notable-move event (a >1% per-tick jump = a shock)."""
+    color, _ = _direction_style(update.direction)
+    glyph = "▲" if update.direction == "up" else "▼"
+    ts = time.strftime("%H:%M:%S")
+    events.appendleft(
+        f"[bright_black]{ts}[/]  [bold {color}]{glyph} {ticker}[/]  "
+        f"[{color}]{update.change_percent:+.2f}%[/] tick  ${format_price(update.price)}"
+    )
+
+
 async def run() -> None:
     """Main demo loop."""
     cache = PriceCache()
-    source = SimulatorDataSource(price_cache=cache, update_interval=0.5)
+    # Factory selects Simulator or Massive from MASSIVE_API_KEY, just like the app.
+    source = create_market_data_source(cache)
+    source_name = type(source).__name__.replace("DataSource", "")
 
-    # Per-ticker price history for sparklines
-    history: dict[str, deque] = {t: deque(maxlen=40) for t in TICKERS}
-
-    # Recent event log
+    history: dict[str, deque] = defaultdict(lambda: deque(maxlen=40))
     events: deque = deque(maxlen=12)
+    pending_actions = list(WATCHLIST_SCRIPT)
 
-    await source.start(TICKERS)
+    await source.start(INITIAL_TICKERS)
     start_time = time.time()
 
-    # Seed initial history points
-    for ticker in TICKERS:
-        update = cache.get(ticker)
-        if update:
-            history[ticker].append(update.price)
+    # Seed initial history from the first snapshot.
+    _, prices = cache.snapshot()
+    for ticker, update in prices.items():
+        history[ticker].append(update.price)
 
     try:
+        tickers = source.get_tickers()
         with Live(
-            build_dashboard(cache, history, events, start_time),
+            build_dashboard(
+                tickers, prices, history, events, source.health(), source_name, start_time
+            ),
             refresh_per_second=4,
             screen=True,
         ) as live:
-            last_version = cache.version
+            last_version = -1
             while time.time() - start_time < DURATION:
                 await asyncio.sleep(0.25)
+                elapsed = time.time() - start_time
 
-                # Check for updates
-                if cache.version == last_version:
-                    continue
-                last_version = cache.version
-
-                # Record history & detect events
-                for ticker in TICKERS:
-                    update = cache.get(ticker)
-                    if update is None:
-                        continue
-                    history[ticker].append(update.price)
-
-                    # Log notable moves
-                    if abs(update.change_percent) > 1.0:
-                        direction = "\u25b2" if update.direction == "up" else "\u25bc"
-                        color = "green" if update.direction == "up" else "red"
-                        timestamp = time.strftime("%H:%M:%S")
+                # Fire any scripted watchlist actions whose time has come.
+                while pending_actions and elapsed >= pending_actions[0][0]:
+                    _, action, raw = pending_actions.pop(0)
+                    norm = normalize_ticker(raw)
+                    ts = time.strftime("%H:%M:%S")
+                    if action == "add":
+                        await source.add_ticker(raw)
                         events.appendleft(
-                            f"[bright_black]{timestamp}[/]  "
-                            f"[bold {color}]{direction} {ticker}[/]  "
-                            f"[{color}]{update.change_percent:+.2f}%[/]  "
-                            f"${format_price(update.price)}"
+                            f"[bright_black]{ts}[/]  [bold bright_blue]+ watchlist[/]  "
+                            f"added [bold]{norm}[/] [bright_black](typed '{raw.strip()}')[/]"
+                        )
+                    else:
+                        await source.remove_ticker(raw)
+                        events.appendleft(
+                            f"[bright_black]{ts}[/]  [bold bright_magenta]- watchlist[/]  "
+                            f"removed [bold]{norm}[/]"
                         )
 
-                live.update(build_dashboard(cache, history, events, start_time))
+                # Atomic (version, prices) read — the SSE change-detection path.
+                version, prices = cache.snapshot()
+                if version == last_version:
+                    # No new data; still refresh so the health/clock tick along.
+                    live.update(
+                        build_dashboard(
+                            source.get_tickers(), prices, history, events,
+                            source.health(), source_name, start_time,
+                        )
+                    )
+                    continue
+                last_version = version
+
+                for ticker, update in prices.items():
+                    history[ticker].append(update.price)
+                    # A >1% move between ticks is a simulator shock event.
+                    if abs(update.change_percent) > 1.0:
+                        _log_shock(events, ticker, update)
+
+                live.update(
+                    build_dashboard(
+                        source.get_tickers(), prices, history, events,
+                        source.health(), source_name, start_time,
+                    )
+                )
 
     except KeyboardInterrupt:
         pass
     finally:
         await source.stop()
 
-    print_summary(cache)
+    _, prices = cache.snapshot()
+    print_summary(prices, source.get_tickers())
 
 
 if __name__ == "__main__":

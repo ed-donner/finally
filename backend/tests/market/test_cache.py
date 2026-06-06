@@ -1,5 +1,7 @@
 """Tests for PriceCache."""
 
+import pytest
+
 from app.market.cache import PriceCache
 
 
@@ -65,6 +67,43 @@ class TestPriceCache:
         assert cache.version == v0 + 1
         cache.update("AAPL", 191.00)
         assert cache.version == v0 + 2
+
+    def test_day_open_defaults_to_first_price(self):
+        """First update for a ticker uses its price as the session open."""
+        cache = PriceCache()
+        update = cache.update("AAPL", 190.00)
+        assert update.day_open == 190.00
+
+    def test_day_open_carries_forward(self):
+        """day_open stays stable across ticks so daily % is meaningful."""
+        cache = PriceCache()
+        cache.update("AAPL", 190.00)
+        update = cache.update("AAPL", 195.00)
+        assert update.day_open == 190.00  # not the previous tick (190.00 here)
+        assert update.day_change == 5.00
+        assert update.day_change_percent == pytest.approx(2.6316, abs=1e-4)
+
+    def test_day_open_explicit_override(self):
+        """An explicit day_open (e.g. from Massive) is used and carried forward."""
+        cache = PriceCache()
+        cache.update("AAPL", 191.00, day_open=188.00)
+        first = cache.get("AAPL")
+        assert first.day_open == 188.00
+        # Subsequent tick without an explicit day_open keeps the same open.
+        update = cache.update("AAPL", 192.00)
+        assert update.day_open == 188.00
+
+    def test_snapshot_returns_version_and_prices(self):
+        """snapshot() returns the current version paired with a copy of prices."""
+        cache = PriceCache()
+        cache.update("AAPL", 190.00)
+        cache.update("GOOGL", 175.00)
+        version, prices = cache.snapshot()
+        assert version == cache.version
+        assert set(prices.keys()) == {"AAPL", "GOOGL"}
+        # Mutating the returned dict must not affect the cache.
+        prices.clear()
+        assert len(cache) == 2
 
     def test_get_price_convenience(self):
         """Test the convenience get_price method."""

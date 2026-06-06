@@ -5,6 +5,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 
+def normalize_ticker(ticker: str) -> str:
+    """Canonical ticker form used everywhere: stripped and upper-cased.
+
+    Both data sources and the cache key on this so ``"aapl"``, ``" AAPL "`` and
+    ``"AAPL"`` all refer to the same instrument (PLAN open-question #3).
+    """
+    return ticker.strip().upper()
+
+
 class MarketDataSource(ABC):
     """Contract for market data providers.
 
@@ -55,3 +64,15 @@ class MarketDataSource(ABC):
     @abstractmethod
     def get_tickers(self) -> list[str]:
         """Return the current list of actively tracked tickers."""
+
+    def health(self) -> dict:
+        """Report data-source liveness for the connection indicator / health API.
+
+        Returns at least ``{"healthy": bool, "last_update": float | None}``.
+        ``last_update`` is the Unix time of the most recent successful write to
+        the cache (``None`` if nothing has been produced yet). The base
+        implementation reports healthy with no timestamp; sources that can fail
+        upstream (e.g. a polling REST client) override this so a dead feed is
+        distinguishable from a merely-quiet one.
+        """
+        return {"healthy": True, "last_update": None}

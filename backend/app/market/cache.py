@@ -20,21 +20,42 @@ class PriceCache:
         self._lock = Lock()
         self._version: int = 0  # Monotonically increasing; bumped on every update
 
-    def update(self, ticker: str, price: float, timestamp: float | None = None) -> PriceUpdate:
+    def update(
+        self,
+        ticker: str,
+        price: float,
+        timestamp: float | None = None,
+        day_open: float | None = None,
+    ) -> PriceUpdate:
         """Record a new price for a ticker. Returns the created PriceUpdate.
 
         Automatically computes direction and change from the previous price.
         If this is the first update for the ticker, previous_price == price (direction='flat').
+
+        ``day_open`` is the session/day open used for the "daily change %" metric:
+          - If provided (e.g. the Massive snapshot's day open), it is used as-is.
+          - Otherwise it carries forward from the prior tick, so it stays stable
+            across the session.
+          - On the very first update for a ticker it defaults to ``price`` — i.e.
+            the simulator's session-open price.
         """
         with self._lock:
             ts = timestamp or time.time()
             prev = self._prices.get(ticker)
             previous_price = prev.price if prev else price
 
+            if day_open is not None:
+                resolved_day_open = day_open
+            elif prev is not None:
+                resolved_day_open = prev.day_open
+            else:
+                resolved_day_open = price
+
             update = PriceUpdate(
                 ticker=ticker,
                 price=round(price, 2),
                 previous_price=round(previous_price, 2),
+                day_open=round(resolved_day_open, 2),
                 timestamp=ts,
             )
             self._prices[ticker] = update
@@ -50,6 +71,16 @@ class PriceCache:
         """Snapshot of all current prices. Returns a shallow copy."""
         with self._lock:
             return dict(self._prices)
+
+    def snapshot(self) -> tuple[int, dict[str, PriceUpdate]]:
+        """Atomically read the version counter and a copy of all prices.
+
+        Returns ``(version, {ticker: PriceUpdate})`` under a single lock so the
+        version and the data it describes can never be torn apart by a
+        concurrent ``update()``. SSE streaming uses this for change detection.
+        """
+        with self._lock:
+            return self._version, dict(self._prices)
 
     def get_price(self, ticker: str) -> float | None:
         """Convenience: get just the price float, or None."""

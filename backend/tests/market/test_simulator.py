@@ -1,5 +1,7 @@
 """Tests for GBMSimulator."""
 
+import numpy as np
+
 from app.market.seed_prices import SEED_PRICES
 from app.market.simulator import GBMSimulator
 
@@ -120,12 +122,87 @@ class TestGBMSimulator:
         """Test that default dt is a reasonable small value."""
         assert 0 < GBMSimulator.DEFAULT_DT < 0.0001
 
-    def test_prices_rounded_to_two_decimals(self):
-        """Test that prices are rounded to 2 decimal places."""
-        sim = GBMSimulator(tickers=["AAPL"])
+    def test_seed_makes_steps_deterministic(self):
+        """Same seed → identical price paths (M2: seedable RNG)."""
+        a = GBMSimulator(tickers=["AAPL", "GOOGL"], seed=123)
+        b = GBMSimulator(tickers=["AAPL", "GOOGL"], seed=123)
+        for _ in range(50):
+            assert a.step() == b.step()
+
+    def test_different_seeds_diverge(self):
+        """Different seeds → different paths."""
+        a = GBMSimulator(tickers=["AAPL"], seed=1)
+        b = GBMSimulator(tickers=["AAPL"], seed=2)
+        for _ in range(10):
+            a.step()
+            b.step()
+        assert a.get_price("AAPL") != b.get_price("AAPL")
+
+    def test_event_shock_fires_with_expected_magnitude(self):
+        """With event_probability=1 a 2–5% shock fires every tick (M2).
+
+        The combined drift+diffusion over one ~8.5e-8 dt step is ~1e-4, so the
+        per-tick move is dominated by the shock and must land in the 2–5% band.
+        """
+        sim = GBMSimulator(tickers=["AAPL"], event_probability=1.0, seed=99)
+        prev = sim.get_price("AAPL")
+        moves = []
+        for _ in range(200):
+            price = sim.step()["AAPL"]
+            moves.append(abs(price / prev - 1.0))
+            prev = price
+        # Every tick moved, and the typical move sits in the shock band.
+        assert min(moves) > 0.015
+        assert np.median(moves) <= 0.06
+
+    def test_cholesky_stays_pd_under_many_correlated_tickers(self):
+        """Cholesky guard (M3): a large correlated set still factorizes."""
+        sim = GBMSimulator(tickers=["AAPL"], seed=0)
+        for i in range(40):
+            sim.add_ticker(f"TECH{i}")
+        # Should not raise and should still produce a price for every ticker.
         result = sim.step()
-        price_str = str(result["AAPL"])
-        # Check that we have at most 2 decimal places
-        if '.' in price_str:
-            decimal_part = price_str.split('.')[1]
-            assert len(decimal_part) <= 2
+        assert len(result) == 41
+
+    def test_add_ticker_normalizes(self):
+        """Lowercase / padded tickers collapse to the canonical form (M6)."""
+        sim = GBMSimulator(tickers=["AAPL"])
+        sim.add_ticker("  tsla ")
+        assert "TSLA" in sim.get_tickers()
+        assert sim.get_price("tsla") == sim.get_price("TSLA")
+        assert sim.get_price("TSLA") == SEED_PRICES["TSLA"]
+
+    def test_cholesky_falls_back_when_not_positive_definite(self, monkeypatch):
+        """A non-PD correlation table degrades to uncorrelated moves, not a crash (M3)."""
+        # Inconsistent correlations (A~B +0.9, A~C +0.9, B~C −0.9) make the
+        # 3x3 matrix non-positive-definite, beyond what the epsilon nudge fixes.
+        bad = {("A", "B"): 0.9, ("A", "C"): 0.9, ("B", "C"): -0.9}
+        monkeypatch.setattr(
+            GBMSimulator,
+            "_pairwise_correlation",
+            staticmethod(lambda t1, t2: bad[tuple(sorted((t1, t2)))]),
+        )
+
+        sim = GBMSimulator(tickers=["A", "B", "C"], seed=0)
+        assert sim._cholesky is None  # fell back to uncorrelated
+        result = sim.step()  # must still run
+        assert set(result.keys()) == {"A", "B", "C"}
+
+    def test_step_returns_full_precision(self):
+        """step() returns full-precision prices; rounding is the cache's job (L3)."""
+        sim = GBMSimulator(tickers=["AAPL"], seed=42)
+        result = sim.step()
+        # A GBM step off a $190 seed virtually never lands exactly on 2 dp.
+        assert round(result["AAPL"], 2) != result["AAPL"] or result["AAPL"] == 190.00
+
+    def test_prices_rounded_to_two_decimals_via_cache(self):
+        """Prices are rounded to 2 dp exactly once, in PriceCache."""
+        from app.market.cache import PriceCache
+
+        sim = GBMSimulator(tickers=["AAPL"], seed=7)
+        cache = PriceCache()
+        for _ in range(20):
+            for ticker, price in sim.step().items():
+                update = cache.update(ticker=ticker, price=price)
+                decimal_part = str(update.price).split(".")[1] if "." in str(update.price) else ""
+                assert len(decimal_part) <= 2
