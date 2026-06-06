@@ -7,14 +7,35 @@ import pytest
 from app.market.cache import PriceCache
 from app.market.massive_client import MassiveDataSource
 
+# A realistic SIP timestamp in NANOSECONDS (2024-02-10T15:20:00Z),
+# i.e. 1707578400 seconds.
+SIP_TS_NS = 1_707_578_400_000_000_000
+SIP_TS_SECONDS = 1_707_578_400.0
 
-def _make_snapshot(ticker: str, price: float, timestamp_ms: int) -> MagicMock:
-    """Create a mock Massive snapshot object."""
+
+def _make_snapshot(
+    ticker: str,
+    price: float,
+    sip_timestamp_ns: int = SIP_TS_NS,
+    day_open: float | None = None,
+    prev_close: float | None = None,
+) -> MagicMock:
+    """Create a mock Massive snapshot mirroring the real TickerSnapshot shape.
+
+    The real ``LastTrade`` model has no ``timestamp`` attribute — it exposes
+    ``sip_timestamp`` / ``participant_timestamp`` in nanoseconds. ``day`` and
+    ``prev_day`` are ``Agg`` objects carrying ``open`` / ``close``.
+    """
     snap = MagicMock()
     snap.ticker = ticker
     snap.last_trade = MagicMock()
     snap.last_trade.price = price
-    snap.last_trade.timestamp = timestamp_ms
+    snap.last_trade.sip_timestamp = sip_timestamp_ns
+    snap.last_trade.participant_timestamp = sip_timestamp_ns
+    snap.day = MagicMock()
+    snap.day.open = day_open
+    snap.prev_day = MagicMock()
+    snap.prev_day.close = prev_close
     return snap
 
 
@@ -34,8 +55,8 @@ class TestMassiveDataSource:
         source._client = MagicMock()  # Satisfy the _poll_once guard
 
         mock_snapshots = [
-            _make_snapshot("AAPL", 190.50, 1707580800000),
-            _make_snapshot("GOOGL", 175.25, 1707580800000),
+            _make_snapshot("AAPL", 190.50),
+            _make_snapshot("GOOGL", 175.25),
         ]
 
         with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
@@ -55,7 +76,7 @@ class TestMassiveDataSource:
         source._tickers = ["AAPL", "BAD"]
         source._client = MagicMock()  # Satisfy the _poll_once guard
 
-        good_snap = _make_snapshot("AAPL", 190.50, 1707580800000)
+        good_snap = _make_snapshot("AAPL", 190.50)
         bad_snap = MagicMock()
         bad_snap.ticker = "BAD"
         bad_snap.last_trade = None  # Will cause AttributeError
@@ -84,7 +105,7 @@ class TestMassiveDataSource:
         assert cache.get_price("AAPL") is None  # No update happened
 
     async def test_timestamp_conversion(self):
-        """Test that timestamps are converted from milliseconds to seconds."""
+        """SIP timestamps are converted from nanoseconds to seconds."""
         cache = PriceCache()
         source = MassiveDataSource(
             api_key="test-key",
@@ -94,14 +115,61 @@ class TestMassiveDataSource:
         source._tickers = ["AAPL"]
         source._client = MagicMock()  # Satisfy the _poll_once guard
 
-        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000)]
+        mock_snapshots = [_make_snapshot("AAPL", 190.50, sip_timestamp_ns=SIP_TS_NS)]
 
         with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
             await source._poll_once()
 
         update = cache.get("AAPL")
         assert update is not None
-        assert update.timestamp == 1707580800.0  # Converted to seconds
+        assert update.timestamp == SIP_TS_SECONDS  # nanoseconds → seconds
+
+    async def test_participant_timestamp_fallback(self):
+        """Falls back to participant_timestamp when sip_timestamp is missing."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()
+
+        snap = _make_snapshot("AAPL", 190.50)
+        snap.last_trade.sip_timestamp = None
+        snap.last_trade.participant_timestamp = SIP_TS_NS
+
+        with patch.object(source, "_fetch_snapshots", return_value=[snap]):
+            await source._poll_once()
+
+        assert cache.get("AAPL").timestamp == SIP_TS_SECONDS
+
+    async def test_day_open_from_snapshot(self):
+        """day_open is taken from the snapshot's day.open for daily change %."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()
+
+        mock_snapshots = [_make_snapshot("AAPL", 195.00, day_open=190.00)]
+
+        with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
+            await source._poll_once()
+
+        update = cache.get("AAPL")
+        assert update.day_open == 190.00
+        assert update.day_change_percent == pytest.approx(2.6316, abs=1e-4)
+
+    async def test_day_open_falls_back_to_prev_close(self):
+        """Before the open, prev_day.close stands in for the day open."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
+        source._tickers = ["AAPL"]
+        source._client = MagicMock()
+
+        # day.open is None (pre-market); prev_day.close should be used.
+        mock_snapshots = [_make_snapshot("AAPL", 195.00, day_open=None, prev_close=189.00)]
+
+        with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
+            await source._poll_once()
+
+        assert cache.get("AAPL").day_open == 189.00
 
     async def test_add_ticker(self):
         """Test adding a ticker."""
@@ -189,7 +257,7 @@ class TestMassiveDataSource:
         cache = PriceCache()
         source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
 
-        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000)]
+        mock_snapshots = [_make_snapshot("AAPL", 190.50)]
 
         with patch("app.market.massive_client.RESTClient"):
             with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):

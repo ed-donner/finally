@@ -48,7 +48,7 @@ class MassiveDataSource(MarketDataSource):
         self._task = asyncio.create_task(self._poll_loop(), name="massive-poller")
         logger.info(
             "Massive poller started: %d tickers, %.1fs interval",
-            len(tickers),
+            len(self._tickers),
             self._interval,
         )
 
@@ -92,37 +92,56 @@ class MassiveDataSource(MarketDataSource):
             return
 
         try:
-            # The Massive RESTClient is synchronous — run in a thread to
-            # avoid blocking the event loop.
-            snapshots = await asyncio.to_thread(self._fetch_snapshots)
+            # The Massive RESTClient is synchronous — run in a thread to avoid
+            # blocking the event loop. Snapshot the ticker list first so a
+            # concurrent add/remove can't mutate it mid-fetch.
+            tickers = list(self._tickers)
+            snapshots = await asyncio.to_thread(self._fetch_snapshots, tickers)
             processed = 0
             for snap in snapshots:
                 try:
-                    price = snap.last_trade.price
-                    # Massive timestamps are Unix milliseconds → convert to seconds
-                    timestamp = snap.last_trade.timestamp / 1000.0
+                    last_trade = snap.last_trade
+                    price = last_trade.price
+                    if price is None:
+                        raise ValueError("snapshot has no last-trade price")
+
+                    # Polygon/Massive trade timestamps are Unix NANOSECONDS
+                    # (SIP, falling back to the participant feed). Convert to
+                    # seconds; if absent, let the cache stamp it with now().
+                    raw_ts = last_trade.sip_timestamp or last_trade.participant_timestamp
+                    timestamp = raw_ts / 1_000_000_000.0 if raw_ts else None
+
+                    # Daily open for "daily change %": today's open, falling
+                    # back to the prior session's close before the market opens.
+                    day_open = None
+                    if snap.day is not None and snap.day.open:
+                        day_open = snap.day.open
+                    elif snap.prev_day is not None and snap.prev_day.close:
+                        day_open = snap.prev_day.close
+
                     self._cache.update(
                         ticker=snap.ticker,
                         price=price,
                         timestamp=timestamp,
+                        day_open=day_open,
                     )
                     processed += 1
-                except (AttributeError, TypeError) as e:
+                except (AttributeError, TypeError, ValueError) as e:
                     logger.warning(
                         "Skipping snapshot for %s: %s",
                         getattr(snap, "ticker", "???"),
                         e,
                     )
-            logger.debug("Massive poll: updated %d/%d tickers", processed, len(self._tickers))
+            logger.debug("Massive poll: updated %d/%d tickers", processed, len(tickers))
 
         except Exception as e:
             logger.error("Massive poll failed: %s", e)
             # Don't re-raise — the loop will retry on the next interval.
             # Common failures: 401 (bad key), 429 (rate limit), network errors.
 
-    def _fetch_snapshots(self) -> list:
+    def _fetch_snapshots(self, tickers: list[str]) -> list:
         """Synchronous call to the Massive REST API. Runs in a thread."""
         return self._client.get_snapshot_all(
             market_type=SnapshotMarketType.STOCKS,
-            tickers=self._tickers,
+            tickers=tickers,
         )

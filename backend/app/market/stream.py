@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Request
@@ -52,16 +53,21 @@ async def _generate_events(
     price_cache: PriceCache,
     request: Request,
     interval: float = 0.5,
+    heartbeat: float = 15.0,
 ) -> AsyncGenerator[str, None]:
     """Async generator that yields SSE-formatted price events.
 
-    Sends all prices every `interval` seconds. Stops when the client
-    disconnects (detected via request.is_disconnected()).
+    Sends all prices every `interval` seconds when they change. If no update
+    has been sent for `heartbeat` seconds (prices flat, source idle, etc.), a
+    comment ping is emitted to keep the connection alive through proxies and
+    browsers that drop idle event-streams. Stops when the client disconnects
+    (detected via request.is_disconnected()).
     """
     # Tell the client to retry after 1 second if the connection drops
     yield "retry: 1000\n\n"
 
     last_version = -1
+    last_send = time.monotonic()
     client_ip = request.client.host if request.client else "unknown"
     logger.info("SSE client connected: %s", client_ip)
 
@@ -72,16 +78,23 @@ async def _generate_events(
                 logger.info("SSE client disconnected: %s", client_ip)
                 break
 
-            current_version = price_cache.version
+            # Atomic (version, prices) read so they can't be torn apart by a
+            # concurrent cache update.
+            current_version, prices = price_cache.snapshot()
             if current_version != last_version:
                 last_version = current_version
-                prices = price_cache.get_all()
-
                 if prices:
                     data = {ticker: update.to_dict() for ticker, update in prices.items()}
                     payload = json.dumps(data)
                     yield f"data: {payload}\n\n"
+                    last_send = time.monotonic()
+            elif time.monotonic() - last_send >= heartbeat:
+                # Keep-alive comment — ignored by EventSource, but keeps the
+                # TCP/proxy connection from being reaped while prices are flat.
+                yield ": keep-alive\n\n"
+                last_send = time.monotonic()
 
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
         logger.info("SSE stream cancelled for: %s", client_ip)
+        raise
