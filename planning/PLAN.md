@@ -69,17 +69,6 @@ The user runs a single Docker command (or a provided start script). A browser op
 - **AI integration**: LiteLLM → OpenRouter (Cerebras for fast inference), with structured outputs for trade execution
 - **Market data**: Environment-variable driven — simulator by default, real data via Massive API if key provided
 
-### Why These Choices
-
-| Decision | Rationale |
-|---|---|
-| SSE over WebSockets | One-way push is all we need; simpler, no bidirectional complexity, universal browser support |
-| Static Next.js export | Single origin, no CORS issues, one port, one container, simple deployment |
-| SQLite over Postgres | No auth = no multi-user = no need for a database server; self-contained, zero config |
-| Single Docker container | Students run one command; no docker-compose for production, no service orchestration |
-| uv for Python | Fast, modern Python project management; reproducible lockfile; what students should learn |
-| Market orders only | Eliminates order book, limit order logic, partial fills — dramatically simpler portfolio math |
-
 ---
 
 ## 4. Directory Structure
@@ -94,9 +83,7 @@ finally/
 │   └── ...                   # Additional agent reference docs
 ├── scripts/
 │   ├── start_mac.sh          # Launch Docker container (macOS/Linux)
-│   ├── stop_mac.sh           # Stop Docker container (macOS/Linux)
-│   ├── start_windows.ps1     # Launch Docker container (Windows PowerShell)
-│   └── stop_windows.ps1      # Stop Docker container (Windows PowerShell)
+│   └── stop_mac.sh           # Stop Docker container (macOS/Linux)
 ├── test/                     # Playwright E2E tests + docker-compose.test.yml
 ├── db/                       # Volume mount target (SQLite file lives here at runtime)
 │   └── .gitkeep              # Directory exists in repo; finally.db is gitignored
@@ -128,8 +115,15 @@ OPENROUTER_API_KEY=your-openrouter-api-key-here
 # If not set, the built-in market simulator is used (recommended for most users)
 MASSIVE_API_KEY=
 
+# Optional: Massive API polling cadence in seconds (default: 15, safe for the free tier)
+MASSIVE_POLL_SECONDS=15
+
 # Optional: Set to "true" for deterministic mock LLM responses (testing)
 LLM_MOCK=false
+
+# Optional: Integer seed for the simulator's RNG. When set, GBM moves and shock events
+# are reproducible — used by E2E tests to make price-driven assertions stable.
+SIMULATOR_SEED=
 ```
 
 ### Behavior
@@ -159,9 +153,8 @@ Both the simulator and the Massive client implement the same abstract interface.
 ### Massive API (Optional)
 
 - REST API polling (not WebSocket) — simpler, works on all tiers
-- Polls for the union of all watched tickers on a configurable interval
-- Free tier (5 calls/min): poll every 15 seconds
-- Paid tiers: poll every 2-15 seconds depending on tier
+- Polls for the union of all watched tickers
+- Poll cadence is controlled by `MASSIVE_POLL_SECONDS` (default `15` — safe for the free tier; lower for paid tiers)
 - Parses REST response into the same format as the simulator
 
 ### Shared Price Cache
@@ -169,15 +162,35 @@ Both the simulator and the Massive client implement the same abstract interface.
 - A single background task (simulator or Massive poller) writes to an in-memory price cache
 - The cache holds the latest price, previous price, and timestamp for each ticker
 - SSE streams read from this cache and push updates to connected clients
+- The cache tracks the **union of watched and held tickers**. A position whose ticker is no longer on the watchlist (e.g., user deleted it after buying) still needs a live price for portfolio valuation, so the backend keeps it in the cache as long as `quantity > 0`.
+- `DELETE /api/watchlist/{ticker}` on a currently-held ticker is allowed — the row is removed from `watchlist`, the ticker disappears from the watchlist UI, but it stays in the price cache and SSE stream because the position still references it. Selling the position to 0 quantity is what removes it from tracking.
 - This architecture supports future multi-user scenarios without changes to the data layer
 
 ### SSE Streaming
 
 - Endpoint: `GET /api/stream/prices`
 - Long-lived SSE connection; client uses native `EventSource` API
-- Server pushes price updates for all tickers known to the system at a regular cadence (~500ms) — in the single-user model this is equivalent to the user's watchlist
-- Each SSE event contains ticker, price, previous price, timestamp, and change direction
-- Client handles reconnection automatically (EventSource has built-in retry)
+- The server polls the price cache every ~500ms and emits an event only when the cache version changes (i.e., when any tracked ticker ticked). Default event name `message`.
+- Each event's `data:` payload is a single JSON object keyed by ticker, where each value is the full `PriceUpdate.to_dict()` from `backend/app/market/models.py`:
+
+  ```json
+  {
+    "AAPL": {
+      "ticker": "AAPL",
+      "price": 190.52,
+      "previous_price": 190.48,
+      "timestamp": 1734040000.0,
+      "change": 0.04,
+      "change_percent": 0.021,
+      "direction": "up"
+    },
+    "GOOGL": { ... }
+  }
+  ```
+
+- All currently tracked tickers are included in every event (not just the ones that changed this tick), so the client always has a complete snapshot. Frontends should reconcile by ticker.
+- The connection emits a `retry: 1000` directive on connect so `EventSource` auto-reconnects after ~1s on drop.
+- No explicit heartbeat is emitted; acceptable for the localhost/demo deployment target. If deployed behind a proxy that closes idle connections, add a periodic `: ping` comment line.
 
 ---
 
@@ -193,7 +206,7 @@ The backend checks for the SQLite database on startup (or first request). If the
 
 ### Schema
 
-All tables include a `user_id` column defaulting to `"default"`. This is hardcoded for now (single-user) but enables future multi-user support without schema migration.
+**Scope note: FinAlly is a single-user application.** There is no login, no signup, no session, and no auth middleware. Every row uses `user_id = "default"`. The `user_id` column exists on every table so a future maintainer could add multi-user support without a schema migration, but no multi-user UI, routing, or auth code should be implemented as part of this build.
 
 **users_profile** — User state (cash balance)
 - `id` TEXT PRIMARY KEY (default: `"default"`)
@@ -231,12 +244,14 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 - `total_value` REAL
 - `recorded_at` TEXT (ISO timestamp)
 
+_Retention: append-only, no compaction. ~2,880 rows/day during a 24h run is trivial for SQLite. If a long-running deployment ever becomes an issue, a downsampling job can be added; not in scope for this build._
+
 **chat_messages** — Conversation history with LLM
 - `id` TEXT PRIMARY KEY (UUID)
 - `user_id` TEXT (default: `"default"`)
 - `role` TEXT (`"user"` or `"assistant"`)
 - `content` TEXT
-- `actions` TEXT (JSON — trades executed, watchlist changes made; null for user messages)
+- `actions` TEXT (JSON — trades executed and watchlist changes made on this turn; null for user messages)
 - `created_at` TEXT (ISO timestamp)
 
 ### Default Seed Data
@@ -248,6 +263,11 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 
 ## 8. API Endpoints
 
+### Initial Load
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/state` | One-shot snapshot for app boot: portfolio (cash, positions, P&L, total value) + watchlist (tickers with latest prices). Used by the frontend on mount instead of separate `/api/portfolio` + `/api/watchlist` calls. |
+
 ### Market Data
 | Method | Path | Description |
 |--------|------|-------------|
@@ -257,25 +277,25 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/portfolio` | Current positions, cash balance, total value, unrealized P&L |
-| POST | `/api/portfolio/trade` | Execute a trade: `{ticker, quantity, side}` |
+| POST | `/api/portfolio/trade` | Execute a market trade. Body: `{ticker: string, side: "buy"\|"sell", quantity: number}`. Response on success (200): `{trade: {...}, portfolio: {...}}` — the new trade row plus the updated portfolio snapshot. Response on validation failure (400): `{error: string, code: "INSUFFICIENT_CASH"\|"INSUFFICIENT_SHARES"\|"UNKNOWN_TICKER"\|"INVALID_QUANTITY"}`. |
 | GET | `/api/portfolio/history` | Portfolio value snapshots over time (for P&L chart) |
 
 ### Watchlist
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/watchlist` | Current watchlist tickers with latest prices |
-| POST | `/api/watchlist` | Add a ticker: `{ticker}` |
-| DELETE | `/api/watchlist/{ticker}` | Remove a ticker |
+| POST | `/api/watchlist` | Add a ticker. Body: `{ticker: string}`. 201 on success, 409 if already on the watchlist. |
+| DELETE | `/api/watchlist/{ticker}` | Remove a ticker from the watchlist. 204 on success. Allowed even if the ticker is currently held (see Section 6). |
 
 ### Chat
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/chat` | Send a message, receive complete JSON response (message + executed actions) |
+| POST | `/api/chat` | Send a message. Body: `{message: string}`. Response (200): `{message: string, trades: [...], watchlist_changes: [...], errors: [...], portfolio: {...}}` — the assistant's reply, the executed actions, any validation errors for actions the LLM proposed, and the updated portfolio snapshot so the UI can reconcile without a follow-up GET. |
 
 ### System
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/health` | Health check (for Docker/deployment) |
+| GET | `/api/health` | Health check (used by Docker `HEALTHCHECK`). Returns 200 with `{"status": "ok"}`. |
 
 ---
 
@@ -290,12 +310,12 @@ There is an OPENROUTER_API_KEY in the .env file in the project root.
 When the user sends a chat message, the backend:
 
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
-2. Loads recent conversation history from the `chat_messages` table
+2. Loads the last 20 messages from `chat_messages` (10 user + 10 assistant turns at most) — a fixed cap, no token-budget math
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
 4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
 5. Parses the complete structured JSON response
 6. Auto-executes any trades or watchlist changes specified in the response
-7. Stores the message and executed actions in `chat_messages`
+7. Stores the user and assistant turns in `chat_messages`. The assistant row's `actions` column records the trades and watchlist changes executed on this turn (including any that failed validation, with their error).
 8. Returns the complete JSON response to the frontend (no token-by-token streaming — Cerebras inference is fast enough that a loading indicator is sufficient)
 
 ### Structured Output Schema
@@ -325,7 +345,7 @@ Trades specified by the LLM execute automatically — no confirmation dialog. Th
 - It creates an impressive, fluid demo experience
 - It demonstrates agentic AI capabilities — the core theme of the course
 
-If a trade fails validation (e.g., insufficient cash), the error is included in the chat response so the LLM can inform the user.
+If a trade fails validation (e.g., insufficient cash), the error appears in the chat response's `errors` array (see Section 8) alongside the trades that did execute. The failed entry is also captured in the assistant message's `actions` JSON so the conversation log is faithful to what was attempted. The frontend surfaces failures inline beneath the assistant message; the LLM does not see the failure on this turn — it sees it next turn when the conversation history is replayed, and can apologize/retry then.
 
 ### System Prompt Guidance
 
@@ -352,7 +372,7 @@ When `LLM_MOCK=true`, the backend returns deterministic mock responses instead o
 
 The frontend is a single-page application with a dense, terminal-inspired layout. The specific component architecture and layout system is up to the Frontend Engineer, but the UI should include these elements:
 
-- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from SSE since page load)
+- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), session change % (vs the first price seen since page load), and a sparkline mini-chart (accumulated from the same SSE stream)
 - **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here.
 - **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by P&L (green = profit, red = loss)
 - **P&L chart** — line chart showing total portfolio value over time, using data from `portfolio_snapshots`
@@ -368,6 +388,7 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 - Price flash effect: on receiving a new price, briefly apply a CSS class with background color transition, then remove it
 - All API calls go to the same origin (`/api/*`) — no CORS configuration needed
 - Tailwind CSS for styling with a custom dark theme
+- **Chart history is SSE-only.** Both the sparklines and the main ticker chart accumulate points from the SSE stream while the page is open — there is no historical price endpoint. On hard refresh the charts start empty and fill in over the next few minutes. This keeps the simulator and Massive backends symmetric (the simulator has no historical data) and avoids a second data path. The P&L chart is the exception — it reads persisted `portfolio_snapshots` via `/api/portfolio/history`.
 
 ---
 
@@ -393,13 +414,13 @@ FastAPI serves the static frontend files and all API routes on port 8000.
 
 ### Docker Volume
 
-The SQLite database persists via a named Docker volume:
+The SQLite database persists via a host bind-mount onto the project's `db/` directory:
 
 ```bash
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
+docker run -v "$(pwd)/db:/app/db" -p 8000:8000 --env-file .env finally
 ```
 
-The `db/` directory in the project root maps to `/app/db` in the container. The backend writes `finally.db` to this path.
+The `db/` directory in the project root maps to `/app/db` in the container. The backend writes `finally.db` to this path, where it can be inspected directly from the host (e.g., with `sqlite3 db/finally.db`). The directory is checked into the repo via `.gitkeep`; `db/finally.db` itself is gitignored.
 
 ### Start/Stop Scripts
 
@@ -413,7 +434,7 @@ The `db/` directory in the project root maps to `/app/db` in the container. The 
 - Stops and removes the running container
 - Does NOT remove the volume (data persists)
 
-**`scripts/start_windows.ps1`** / **`scripts/stop_windows.ps1`**: PowerShell equivalents for Windows.
+Windows users run the equivalent `docker run` / `docker stop` commands directly — see the README for the one-liners. No PowerShell scripts are maintained.
 
 All scripts should be idempotent — safe to run multiple times.
 
@@ -444,7 +465,7 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 
 **Infrastructure**: A separate `docker-compose.test.yml` in `test/` that spins up the app container plus a Playwright container. This keeps browser dependencies out of the production image.
 
-**Environment**: Tests run with `LLM_MOCK=true` by default for speed and determinism.
+**Environment**: Tests run with `LLM_MOCK=true` and `SIMULATOR_SEED=<fixed value>` by default. The seed makes simulator price moves reproducible so price-driven assertions (flash effects, sparkline shape, P&L direction) don't flake.
 
 **Key Scenarios**:
 - Fresh start: default watchlist appears, $10k balance shown, prices are streaming
@@ -454,3 +475,35 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Review Feedback
+
+This section captures open questions, inconsistencies, and simplification opportunities surfaced during a review of the plan. Items here are not yet decided — they need an author/owner call before any agent implements them.
+
+### Open Questions / Clarifications
+
+_All flagged questions have been resolved and folded into Sections 5–12. Summary of resolutions:_
+
+- **SSE payload shape** — Section 6: batched JSON object keyed by ticker, full `PriceUpdate.to_dict()` (includes `change`, `change_percent`, `direction`), default `message` event, `retry: 1000` directive, no heartbeat (acceptable for localhost demo).
+- **Historical chart data** — Section 10: charts are SSE-only and start empty on refresh; intentional, keeps simulator/Massive symmetric.
+- **Held but unwatched tickers** — Section 6: price cache tracks `watched ∪ held`. `DELETE /api/watchlist/{ticker}` on a held ticker is allowed; the position keeps streaming until sold to 0.
+- **Trade and chat contracts** — Section 8: request/response bodies, status codes, and error codes are spelled out in the endpoint tables. Both `/api/portfolio/trade` and `/api/chat` return the updated portfolio so the UI doesn't need a follow-up GET.
+- **Conversation history budget** — Section 9: fixed cap of 20 messages.
+- **Trade failures in chat** — Section 9: surfaced in the response's `errors` array, persisted in the assistant message's `actions` JSON, and shown inline in the chat UI.
+- **Health endpoint** — Section 8: `200` with `{"status": "ok"}`.
+- **E2E determinism** — Sections 5 + 12: `SIMULATOR_SEED` env var; tests pin a fixed value.
+- **Portfolio snapshot retention** — Section 7: append-only, no compaction; trivial volume.
+- **Daily change %** — already resolved as session change % (Section 10).
+- **Massive poll cadence** — already resolved as `MASSIVE_POLL_SECONDS` (Sections 5 + 6).
+
+This subsection is intentionally retained as a record; future reviews can add new questions here.
+
+### Inconsistencies
+
+_All flagged inconsistencies have been resolved in Sections 3–11. This subsection is intentionally empty; future reviews can add new entries here._
+
+### Opportunities to Simplify
+
+_All accepted simplifications have been folded into Sections 3–11. This subsection is intentionally empty; future reviews can add new candidates here._
