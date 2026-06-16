@@ -1,53 +1,53 @@
-# Market Simulator Design
+# マーケットシミュレーター設計
 
-Approach and code structure for simulating realistic stock prices when no Massive API key is configured.
+Massive API キーが設定されていない場合にリアルな株価をシミュレートするためのアプローチとコード構造。
 
-## Overview
+## 概要
 
-The simulator uses **Geometric Brownian Motion (GBM)** to generate realistic stock price paths. GBM is the standard model underlying Black-Scholes option pricing — prices evolve continuously with random noise, can't go negative, and exhibit the lognormal distribution seen in real markets.
+シミュレーターは**幾何ブラウン運動（GBM）**を使ってリアルな株価パスを生成します。GBM は Black-Scholes オプション価格モデルの基礎となっている標準モデルです — 価格は連続的にランダムノイズとともに変動し、マイナスにはならず、実際の市場で観測される対数正規分布を示します。
 
-Updates run at ~500ms intervals, producing a continuous stream of price changes that feel alive.
+更新は約 500ms 間隔で実行され、生き生きとした継続的な価格変化のストリームを生成します。
 
-## GBM Math
+## GBM の数学
 
-At each time step, a stock price evolves as:
+各タイムステップにおいて、株価は次のように変化します:
 
 ```
 S(t+dt) = S(t) * exp((mu - sigma^2/2) * dt + sigma * sqrt(dt) * Z)
 ```
 
-Where:
-- `S(t)` = current price
-- `mu` = annualized drift (expected return), e.g. 0.05 (5%)
-- `sigma` = annualized volatility, e.g. 0.20 (20%)
-- `dt` = time step as fraction of a trading year
-- `Z` = standard normal random variable (drawn from N(0,1))
+ここで:
+- `S(t)` = 現在の価格
+- `mu` = 年率ドリフト（期待収益率）、例: 0.05（5%）
+- `sigma` = 年率ボラティリティ、例: 0.20（20%）
+- `dt` = 取引年の端数としてのタイムステップ
+- `Z` = 標準正規確率変数（N(0,1) から抽出）
 
-For our 500ms updates with ~252 trading days and ~6.5 hours per day:
+約 252 取引日、1 日約 6.5 時間の 500ms 更新の場合:
 ```
 dt = 0.5 / (252 * 6.5 * 3600) = ~8.5e-8
 ```
 
-This tiny `dt` produces small, realistic per-tick moves.
+この微小な `dt` が小さく自然なティックあたりの値動きを生成します。
 
-## Correlated Moves
+## 相関移動
 
-Real stocks don't move independently — tech stocks tend to move together, etc. We use a **Cholesky decomposition** of a correlation matrix to generate correlated random draws.
+実際の株は独立して動くわけではありません — テクノロジー株は連動して動く傾向があります。相関ランダム抽出を生成するために、相関行列の**コレスキー分解**を使用します。
 
-Given a correlation matrix `C`, compute `L = cholesky(C)`. Then for independent standard normals `Z_independent`:
+相関行列 `C` が与えられたとき、`L = cholesky(C)` を計算します。独立した標準正規分布 `Z_independent` に対して:
 ```
 Z_correlated = L @ Z_independent
 ```
 
-Default correlation groups:
-- **Tech**: AAPL, GOOGL, MSFT, AMZN, META, NVDA, NFLX — corr ~0.6 within group
-- **Finance**: JPM, V — corr ~0.5 within group
-- **Cross-group**: ~0.3 baseline correlation
-- **TSLA**: lower correlation with everything (~0.3) — it does its own thing
+デフォルト相関グループ:
+- **テクノロジー**: AAPL、GOOGL、MSFT、AMZN、META、NVDA、NFLX — グループ内相関 ~0.6
+- **金融**: JPM、V — グループ内相関 ~0.5
+- **セクター間**: ~0.3 のベースライン相関
+- **TSLA**: すべてとの相関が低い（~0.3）— 独自の動きをする
 
-## Random Events
+## ランダムイベント
 
-Every step, each ticker has a small probability (~0.001) of a random event — a sudden 2-5% move. This adds drama and makes the dashboard visually interesting.
+各ステップで、各ティッカーには小さな確率（~0.001）でランダムイベントが発生します — 突然の 2-5% の移動。これによりドラマが加わり、ダッシュボードが視覚的に面白くなります。
 
 ```python
 if random.random() < event_probability:
@@ -55,9 +55,9 @@ if random.random() < event_probability:
     price *= (1 + shock)
 ```
 
-## Seed Prices
+## シード価格
 
-Realistic starting prices for the default watchlist:
+デフォルトウォッチリストのリアルな開始価格:
 
 ```python
 SEED_PRICES: dict[str, float] = {
@@ -74,11 +74,11 @@ SEED_PRICES: dict[str, float] = {
 }
 ```
 
-Tickers added dynamically (not in the seed list) start at a random price between $50-$300.
+動的に追加されたティッカー（リストにないもの）は $50-$300 のランダムな価格から開始します。
 
-## Per-Ticker Parameters
+## ティッカーごとのパラメーター
 
-Each ticker has its own volatility to reflect real-world behavior:
+各ティッカーには実世界の動作を反映した固有のボラティリティがあります:
 
 ```python
 TICKER_PARAMS: dict[str, dict] = {
@@ -86,19 +86,19 @@ TICKER_PARAMS: dict[str, dict] = {
     "GOOGL": {"sigma": 0.25, "mu": 0.05},
     "MSFT":  {"sigma": 0.20, "mu": 0.05},
     "AMZN":  {"sigma": 0.28, "mu": 0.05},
-    "TSLA":  {"sigma": 0.50, "mu": 0.03},   # High vol
-    "NVDA":  {"sigma": 0.40, "mu": 0.08},   # High vol, strong drift
+    "TSLA":  {"sigma": 0.50, "mu": 0.03},   # 高ボラ
+    "NVDA":  {"sigma": 0.40, "mu": 0.08},   # 高ボラ、強いドリフト
     "META":  {"sigma": 0.30, "mu": 0.05},
-    "JPM":   {"sigma": 0.18, "mu": 0.04},   # Low vol (bank)
-    "V":     {"sigma": 0.17, "mu": 0.04},   # Low vol (payments)
+    "JPM":   {"sigma": 0.18, "mu": 0.04},   # 低ボラ（銀行）
+    "V":     {"sigma": 0.17, "mu": 0.04},   # 低ボラ（決済）
     "NFLX":  {"sigma": 0.35, "mu": 0.05},
 }
 
-# Default for unknown tickers
+# 未知のティッカーのデフォルト
 DEFAULT_PARAMS = {"sigma": 0.25, "mu": 0.05}
 ```
 
-## Implementation
+## 実装
 
 ```python
 import math
@@ -107,7 +107,7 @@ import time
 import numpy as np
 
 class GBMSimulator:
-    """Generates correlated GBM price paths for multiple tickers."""
+    """複数ティッカーの相関 GBM 価格パスを生成する。"""
 
     def __init__(
         self,
@@ -142,12 +142,12 @@ class GBMSimulator:
         self._rebuild_cholesky()
 
     def step(self) -> dict[str, float]:
-        """Advance one time step. Returns {ticker: new_price}."""
+        """1 タイムステップ進める。{ticker: new_price} を返す。"""
         n = len(self._tickers)
         if n == 0:
             return {}
 
-        # Generate correlated random normals
+        # 相関正規乱数を生成
         z_independent = np.random.standard_normal(n)
         if self._cholesky is not None:
             z = self._cholesky @ z_independent
@@ -160,12 +160,12 @@ class GBMSimulator:
             mu = params["mu"]
             sigma = params["sigma"]
 
-            # GBM step
+            # GBM ステップ
             drift = (mu - 0.5 * sigma**2) * self._dt
             diffusion = sigma * math.sqrt(self._dt) * z[i]
             self._prices[ticker] *= math.exp(drift + diffusion)
 
-            # Random event
+            # ランダムイベント
             if random.random() < self._event_prob:
                 shock = random.uniform(0.02, 0.05) * random.choice([-1, 1])
                 self._prices[ticker] *= (1 + shock)
@@ -178,7 +178,7 @@ class GBMSimulator:
         return self._prices.get(ticker)
 
     def _rebuild_cholesky(self) -> None:
-        """Rebuild the Cholesky decomposition of the correlation matrix."""
+        """相関行列のコレスキー分解を再構築する。"""
         n = len(self._tickers)
         if n <= 1:
             self._cholesky = None
@@ -194,7 +194,7 @@ class GBMSimulator:
         self._cholesky = np.linalg.cholesky(corr)
 
     def _get_correlation(self, t1: str, t2: str) -> float:
-        """Return pairwise correlation between two tickers."""
+        """2 つのティッカー間のペアワイズ相関を返す。"""
         tech = {"AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "NFLX"}
         finance = {"JPM", "V"}
 
@@ -203,43 +203,43 @@ class GBMSimulator:
         t1_fin = t1 in finance
         t2_fin = t2 in finance
 
-        # Same sector: higher correlation
+        # 同一セクター: 高い相関
         if t1_tech and t2_tech:
             return 0.6
         if t1_fin and t2_fin:
             return 0.5
 
-        # TSLA is a loner
+        # TSLA は一匹狼
         if t1 == "TSLA" or t2 == "TSLA":
             return 0.3
 
-        # Cross-sector or unknown
+        # セクター間または未知
         if (t1_tech and t2_fin) or (t1_fin and t2_tech):
             return 0.3
 
-        # Default
+        # デフォルト
         return 0.3
 ```
 
-## File Structure
+## ファイル構造
 
-All simulator code lives in a single module:
+すべてのシミュレーターコードは単一のモジュールに配置されます:
 
 ```
 backend/
   app/
     market/
-      simulator.py       # GBMSimulator class + seed data + SimulatorDataSource
-      seed_prices.py      # SEED_PRICES, TICKER_PARAMS, DEFAULT_PARAMS (constants)
+      simulator.py       # GBMSimulator クラス + シードデータ + SimulatorDataSource
+      seed_prices.py      # SEED_PRICES、TICKER_PARAMS、DEFAULT_PARAMS（定数）
 ```
 
-`seed_prices.py` contains just the constant dictionaries. `simulator.py` contains the `GBMSimulator` class and the `SimulatorDataSource` (the `MarketDataSource` implementation that wraps `GBMSimulator` in an async loop).
+`seed_prices.py` には定数辞書のみが含まれます。`simulator.py` には `GBMSimulator` クラスと `SimulatorDataSource`（`GBMSimulator` を非同期ループでラップする `MarketDataSource` 実装）が含まれます。
 
-## Behavior Notes
+## 動作に関する注意
 
-- Prices never go negative (GBM is multiplicative — `exp()` is always positive)
-- The tiny `dt` produces sub-cent moves per tick, which accumulate naturally over time
-- With `sigma=0.50` (TSLA), a day of simulated trading produces roughly the right intraday range
-- The correlation matrix must be positive semi-definite — Cholesky decomposition guarantees this for valid correlation matrices
-- Random events happen ~0.1% of steps = roughly once every 500 seconds per ticker. With 10 tickers, expect an event somewhere roughly every 50 seconds — enough to keep it interesting
-- When a new ticker is added mid-session, the Cholesky matrix is rebuilt. This is O(n^2) but n is small (<50 tickers)
+- 価格がマイナスになることはない（GBM は乗法的 — `exp()` は常に正）
+- 微小な `dt` がティックあたりのサブセント移動を生成し、時間とともに自然に蓄積する
+- `sigma=0.50`（TSLA）の場合、シミュレートされた 1 日の取引でほぼ適切な日中レンジが生成される
+- 相関行列は正半定値でなければならない — コレスキー分解は有効な相関行列に対してこれを保証する
+- ランダムイベントはステップの約 0.1% で発生 = ティッカーあたり約 500 秒に 1 回。10 ティッカーであれば、約 50 秒ごとにどこかでイベントが発生する — 興味深さを保つのに十分
+- セッション途中で新しいティッカーが追加されると、コレスキー行列が再構築される。これは O(n^2) だが n は小さい（< 50 ティッカー）

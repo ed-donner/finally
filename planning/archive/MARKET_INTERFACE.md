@@ -1,73 +1,73 @@
-# Market Data Interface Design
+# マーケットデータインターフェース設計
 
-Unified Python interface for market data in FinAlly. Two implementations (simulator and Massive API) behind one abstract interface. All downstream code — SSE streaming, price cache, portfolio valuation — is source-agnostic.
+FinAlly のマーケットデータ用 Python 統一インターフェース。2 つの実装（シミュレーターと Massive API）を 1 つの抽象インターフェースの背後に配置。SSE ストリーミング、価格キャッシュ、ポートフォリオ評価など、すべての下流コードはデータソースに依存しません。
 
-## Core Data Model
+## コアデータモデル
 
 ```python
 from dataclasses import dataclass
 
 @dataclass
 class PriceUpdate:
-    """A single price update for one ticker."""
+    """単一ティッカーの価格更新。"""
     ticker: str
     price: float
     previous_price: float
-    timestamp: float          # Unix seconds
+    timestamp: float          # Unix 秒
     change: float             # price - previous_price
-    direction: str            # "up", "down", or "flat"
+    direction: str            # "up"、"down"、または "flat"
 ```
 
-This is the only data structure that leaves the market data layer. Everything downstream works with `PriceUpdate` objects.
+これはマーケットデータレイヤーから外に出る唯一のデータ構造です。すべての下流コードは `PriceUpdate` オブジェクトで動作します。
 
-## Abstract Interface
+## 抽象インターフェース
 
 ```python
 from abc import ABC, abstractmethod
 
 class MarketDataSource(ABC):
-    """Abstract interface for market data providers."""
+    """マーケットデータプロバイダーの抽象インターフェース。"""
 
     @abstractmethod
     async def start(self, tickers: list[str]) -> None:
-        """Begin producing price updates for the given tickers."""
+        """指定されたティッカーの価格更新の生成を開始する。"""
 
     @abstractmethod
     async def stop(self) -> None:
-        """Stop producing price updates and clean up."""
+        """価格更新の生成を停止してクリーンアップを行う。"""
 
     @abstractmethod
     async def add_ticker(self, ticker: str) -> None:
-        """Add a ticker to the active set."""
+        """アクティブセットにティッカーを追加する。"""
 
     @abstractmethod
     async def remove_ticker(self, ticker: str) -> None:
-        """Remove a ticker from the active set."""
+        """アクティブセットからティッカーを削除する。"""
 
     @abstractmethod
     def get_tickers(self) -> list[str]:
-        """Return the current list of active tickers."""
+        """現在アクティブなティッカーのリストを返す。"""
 ```
 
-Both implementations write to a shared `PriceCache` (see below). The interface does **not** return prices directly — it pushes updates into the cache on its own schedule.
+両実装は共有の `PriceCache` に書き込みます（以下参照）。インターフェースは価格を直接返しません — 独自のスケジュールでキャッシュに更新をプッシュします。
 
-## Price Cache
+## 価格キャッシュ
 
-Shared in-memory store that both data sources write to and the SSE streamer reads from.
+両データソースが書き込み、SSE ストリーマーが読み取る共有インメモリストア。
 
 ```python
 import time
 from threading import Lock
 
 class PriceCache:
-    """Thread-safe cache of latest prices per ticker."""
+    """ティッカーごとの最新価格のスレッドセーフキャッシュ。"""
 
     def __init__(self):
         self._prices: dict[str, PriceUpdate] = {}
         self._lock = Lock()
 
     def update(self, ticker: str, price: float, timestamp: float | None = None) -> PriceUpdate:
-        """Update price for a ticker. Returns the PriceUpdate."""
+        """ティッカーの価格を更新する。PriceUpdate を返す。"""
         with self._lock:
             ts = timestamp or time.time()
             previous = self._prices.get(ticker)
@@ -92,30 +92,30 @@ class PriceCache:
             return update
 
     def get(self, ticker: str) -> PriceUpdate | None:
-        """Get latest price for a ticker."""
+        """ティッカーの最新価格を取得する。"""
         with self._lock:
             return self._prices.get(ticker)
 
     def get_all(self) -> dict[str, PriceUpdate]:
-        """Get all current prices."""
+        """すべての現在の価格を取得する。"""
         with self._lock:
             return dict(self._prices)
 
     def remove(self, ticker: str) -> None:
-        """Remove a ticker from the cache."""
+        """キャッシュからティッカーを削除する。"""
         with self._lock:
             self._prices.pop(ticker, None)
 ```
 
-## Factory Function
+## ファクトリー関数
 
-Select the data source at startup based on environment:
+起動時に環境に基づいてデータソースを選択:
 
 ```python
 import os
 
 def create_market_data_source(price_cache: PriceCache) -> MarketDataSource:
-    """Create the appropriate market data source based on environment."""
+    """環境に基づいて適切なマーケットデータソースを作成する。"""
     api_key = os.environ.get("MASSIVE_API_KEY", "").strip()
 
     if api_key:
@@ -126,7 +126,7 @@ def create_market_data_source(price_cache: PriceCache) -> MarketDataSource:
         return SimulatorDataSource(price_cache=price_cache)
 ```
 
-## Massive Implementation Sketch
+## Massive 実装スケッチ
 
 ```python
 import asyncio
@@ -168,7 +168,7 @@ class MassiveDataSource(MarketDataSource):
     async def _poll_once(self) -> None:
         if not self._tickers:
             return
-        # Run synchronous Massive client in thread pool
+        # 同期的な Massive クライアントをスレッドプールで実行
         snapshots = await asyncio.to_thread(
             self._client.get_snapshot_all,
             market_type=SnapshotMarketType.STOCKS,
@@ -178,11 +178,11 @@ class MassiveDataSource(MarketDataSource):
             self._cache.update(
                 ticker=snap.ticker,
                 price=snap.last_trade.price,
-                timestamp=snap.last_trade.timestamp / 1000,  # ms -> seconds
+                timestamp=snap.last_trade.timestamp / 1000,  # ms -> 秒
             )
 ```
 
-## Simulator Implementation Sketch
+## シミュレーター実装スケッチ
 
 ```python
 import asyncio
@@ -193,7 +193,7 @@ class SimulatorDataSource(MarketDataSource):
         self._interval = update_interval
         self._tickers: list[str] = []
         self._task: asyncio.Task | None = None
-        self._sim: GBMSimulator | None = None  # See MARKET_SIMULATOR.md
+        self._sim: GBMSimulator | None = None  # MARKET_SIMULATOR.md を参照
 
     async def start(self, tickers: list[str]) -> None:
         self._tickers = list(tickers)
@@ -219,19 +219,19 @@ class SimulatorDataSource(MarketDataSource):
 
     async def _run_loop(self) -> None:
         while True:
-            prices = self._sim.step()  # Returns dict[str, float]
+            prices = self._sim.step()  # dict[str, float] を返す
             for ticker, price in prices.items():
                 self._cache.update(ticker=ticker, price=price)
             await asyncio.sleep(self._interval)
 ```
 
-## Integration with SSE
+## SSE との統合
 
-The SSE endpoint reads from the `PriceCache` and pushes to connected clients:
+SSE エンドポイントは `PriceCache` から読み取り、接続されたクライアントにプッシュします:
 
 ```python
 async def price_stream(price_cache: PriceCache):
-    """SSE generator that yields price updates."""
+    """価格更新を yield する SSE ジェネレーター。"""
     while True:
         prices = price_cache.get_all()
         data = {
@@ -249,25 +249,25 @@ async def price_stream(price_cache: PriceCache):
         await asyncio.sleep(0.5)
 ```
 
-## File Structure
+## ファイル構造
 
 ```
 backend/
   app/
     market/
       __init__.py
-      models.py             # PriceUpdate dataclass
-      interface.py           # MarketDataSource ABC, PriceCache
+      models.py             # PriceUpdate データクラス
+      interface.py           # MarketDataSource ABC、PriceCache
       factory.py             # create_market_data_source()
       massive_client.py      # MassiveDataSource
       simulator.py           # SimulatorDataSource + GBMSimulator
-      seed_prices.py         # Default ticker seed prices
+      seed_prices.py         # デフォルトティッカーシード価格
 ```
 
-## Lifecycle
+## ライフサイクル
 
-1. **App startup**: Create `PriceCache`, call `create_market_data_source(price_cache)`, then `await source.start(initial_tickers)`
-2. **Watchlist changes**: Call `source.add_ticker()` or `source.remove_ticker()`
-3. **SSE streaming**: Reads from `PriceCache.get_all()` every 500ms
-4. **Trade execution**: Reads current price from `PriceCache.get(ticker)`
-5. **App shutdown**: Call `await source.stop()`
+1. **アプリ起動**: `PriceCache` を作成し、`create_market_data_source(price_cache)` を呼び出し、次に `await source.start(initial_tickers)`
+2. **ウォッチリスト変更**: `source.add_ticker()` または `source.remove_ticker()` を呼び出す
+3. **SSE ストリーミング**: 500ms ごとに `PriceCache.get_all()` から読み取る
+4. **取引実行**: `PriceCache.get(ticker)` から現在価格を読み取る
+5. **アプリ終了**: `await source.stop()` を呼び出す

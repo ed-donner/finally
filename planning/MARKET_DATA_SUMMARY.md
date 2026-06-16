@@ -1,104 +1,104 @@
-# Market Data Backend — Summary
+# マーケットデータバックエンド — サマリー
 
-**Status:** Complete, tested, reviewed, all issues resolved.
+**ステータス:** 完成、テスト済み、レビュー済み、すべての問題解決済み。
 
-## What Was Built
+## 構築内容
 
-A complete market data subsystem in `backend/app/market/` (8 modules, ~500 lines) providing live price simulation and real market data via a unified interface.
+`backend/app/market/` に 8 モジュール、約 500 行からなる完全なマーケットデータサブシステムを構築。統一インターフェースを通じてライブ価格シミュレーションと実際のマーケットデータを提供します。
 
-### Architecture
+### アーキテクチャ
 
 ```
 MarketDataSource (ABC)
-├── SimulatorDataSource  →  GBM simulator (default, no API key needed)
-└── MassiveDataSource    →  Polygon.io REST poller (when MASSIVE_API_KEY set)
+├── SimulatorDataSource  →  GBM シミュレーター（デフォルト、API キー不要）
+└── MassiveDataSource    →  Polygon.io REST ポーラー（MASSIVE_API_KEY 設定時）
         │
         ▼
-   PriceCache (thread-safe, in-memory)
+   PriceCache（スレッドセーフ、インメモリ）
         │
-        ├──→ SSE stream endpoint (/api/stream/prices)
-        ├──→ Portfolio valuation
-        └──→ Trade execution
+        ├──→ SSE ストリームエンドポイント（/api/stream/prices）
+        ├──→ ポートフォリオ評価
+        └──→ 取引実行
 ```
 
-### Modules
+### モジュール
 
-| File | Purpose |
+| ファイル | 用途 |
 |------|---------|
-| `models.py` | `PriceUpdate` — immutable frozen dataclass (ticker, price, previous_price, timestamp, change, direction) |
-| `interface.py` | `MarketDataSource` — abstract base class defining `start/stop/add_ticker/remove_ticker/get_tickers` |
-| `cache.py` | `PriceCache` — thread-safe price store with version counter for SSE change detection |
-| `seed_prices.py` | Realistic seed prices, per-ticker GBM params (drift/volatility), correlation groups |
-| `simulator.py` | `GBMSimulator` (Geometric Brownian Motion with Cholesky-correlated moves) + `SimulatorDataSource` |
-| `massive_client.py` | `MassiveDataSource` — REST polling client for Polygon.io via the `massive` package |
-| `factory.py` | `create_market_data_source()` — selects simulator or Massive based on `MASSIVE_API_KEY` env var |
-| `stream.py` | `create_stream_router()` — FastAPI SSE endpoint factory using version-based change detection |
+| `models.py` | `PriceUpdate` — イミュータブルなフローズンデータクラス（ticker、price、previous_price、timestamp、change、direction） |
+| `interface.py` | `MarketDataSource` — `start/stop/add_ticker/remove_ticker/get_tickers` を定義する抽象基底クラス |
+| `cache.py` | `PriceCache` — SSE 変更検知用のバージョンカウンター付きスレッドセーフ価格ストア |
+| `seed_prices.py` | リアルなシード価格、ティッカーごとの GBM パラメーター（ドリフト/ボラティリティ）、相関グループ |
+| `simulator.py` | `GBMSimulator`（コレスキー相関移動を用いた幾何ブラウン運動）+ `SimulatorDataSource` |
+| `massive_client.py` | `MassiveDataSource` — `massive` パッケージ経由の Polygon.io 用 REST ポーリングクライアント |
+| `factory.py` | `create_market_data_source()` — `MASSIVE_API_KEY` 環境変数に基づいてシミュレーターか Massive かを選択 |
+| `stream.py` | `create_stream_router()` — バージョンベースの変更検知を使用する FastAPI SSE エンドポイントファクトリー |
 
-### Key Design Decisions
+### 主要設計判断
 
-- **Strategy pattern** — both data sources implement the same ABC; downstream code is source-agnostic
-- **PriceCache as single point of truth** — producers write, consumers read; no direct coupling
-- **GBM with correlated moves** — Cholesky decomposition of sector-based correlation matrix; tech stocks correlate at 0.6, finance at 0.5, cross-sector at 0.3
-- **Random shock events** — ~0.1% chance per tick per ticker of a 2-5% move for visual drama
-- **SSE over WebSockets** — simpler, one-way push, universal browser support
+- **ストラテジーパターン** — 両データソースが同じ ABC を実装; 下流コードはソース非依存
+- **PriceCache を唯一の真実の源泉として** — プロデューサーが書き込み、コンシューマーが読み取り; 直接結合なし
+- **相関移動を伴う GBM** — セクターベースの相関行列のコレスキー分解; テクノロジー株の相関は 0.6、金融は 0.5、セクター間は 0.3
+- **ランダムショックイベント** — ティッカーあたりティックあたり約 0.1% の確率で 2-5% の移動が発生し、視覚的ドラマを演出
+- **WebSockets より SSE** — シンプル、一方向プッシュ、ユニバーサルなブラウザサポート
 
-## Test Suite
+## テストスイート
 
-**73 tests, all passing.** 6 test modules in `backend/tests/market/`.
+**テスト 73 件、すべて合格。** `backend/tests/market/` に 6 つのテストモジュール。
 
-| Module | Tests | Coverage |
+| モジュール | テスト数 | カバレッジ |
 |--------|-------|----------|
 | test_models.py | 11 | models.py: 100% |
 | test_cache.py | 13 | cache.py: 100% |
 | test_simulator.py | 17 | simulator.py: 98% |
-| test_simulator_source.py | 10 | (integration tests) |
+| test_simulator_source.py | 10 |（統合テスト） |
 | test_factory.py | 7 | factory.py: 100% |
-| test_massive.py | 13 | massive_client.py: 56% (expected — API methods mocked) |
+| test_massive.py | 13 | massive_client.py: 56%（想定内 — API メソッドはモック） |
 
-Overall coverage: 84%.
+全体カバレッジ: 84%。
 
-## Code Review & Fixes Applied
+## コードレビューと適用済み修正
 
-A comprehensive code review identified 7 issues. All were resolved:
+包括的なコードレビューで 7 つの問題を特定。すべて解決済み:
 
-1. **pyproject.toml build config** — added `[tool.hatch.build.targets.wheel] packages = ["app"]`
-2. **Lazy imports removed** — `massive` is a core dependency; imports moved to top level
-3. **SSE return type fixed** — `_generate_events` annotated as `AsyncGenerator[str, None]`
-4. **Public `get_tickers()`** — added to `GBMSimulator` to avoid private attribute access
-5. **Correlation constants cleaned up** — removed unused `DEFAULT_CORR`, consolidated into `CROSS_GROUP_CORR`
-6. **Unused test imports removed** — `pytest`, `math`, `asyncio` cleaned from 4 test files
-7. **Massive test mocks fixed** — `source._client` set in tests, patches target correct names
+1. **pyproject.toml ビルド設定** — `[tool.hatch.build.targets.wheel] packages = ["app"]` を追加
+2. **遅延インポートを削除** — `massive` はコア依存関係; インポートをトップレベルに移動
+3. **SSE 戻り値型を修正** — `_generate_events` に `AsyncGenerator[str, None]` アノテーションを追加
+4. **パブリック `get_tickers()`** — プライベート属性アクセスを避けるため `GBMSimulator` に追加
+5. **相関定数を整理** — 未使用の `DEFAULT_CORR` を削除し、`CROSS_GROUP_CORR` に統合
+6. **テストの未使用インポートを削除** — 4 つのテストファイルから `pytest`、`math`、`asyncio` をクリーンアップ
+7. **Massive テストのモックを修正** — テスト内に `source._client` を設定し、パッチが正しい名前をターゲットにするよう修正
 
-## Demo
+## デモ
 
-A Rich terminal demo is available at `backend/market_data_demo.py`:
+リッチなターミナルデモが `backend/market_data_demo.py` で利用可能です:
 
 ```bash
 cd backend
 uv run market_data_demo.py
 ```
 
-Displays a live-updating dashboard with all 10 tickers, sparklines, color-coded direction arrows, and an event log for notable price moves. Runs 60 seconds or until Ctrl+C.
+10 ティッカーすべてのライブ更新ダッシュボード、スパークライン、カラーコードされた方向矢印、注目すべき価格移動のイベントログを表示します。60 秒間実行されるか Ctrl+C で終了します。
 
-## Usage for Downstream Code
+## 下流コードからの使用方法
 
 ```python
 from app.market import PriceCache, create_market_data_source
 
-# Startup
+# 起動
 cache = PriceCache()
-source = create_market_data_source(cache)  # Reads MASSIVE_API_KEY
+source = create_market_data_source(cache)  # MASSIVE_API_KEY を読み取る
 await source.start(["AAPL", "GOOGL", "MSFT", ...])
 
-# Read prices
-update = cache.get("AAPL")          # PriceUpdate or None
-price = cache.get_price("AAPL")     # float or None
+# 価格の読み取り
+update = cache.get("AAPL")          # PriceUpdate または None
+price = cache.get_price("AAPL")     # float または None
 all_prices = cache.get_all()        # dict[str, PriceUpdate]
 
-# Dynamic watchlist
+# 動的ウォッチリスト
 await source.add_ticker("TSLA")
 await source.remove_ticker("GOOGL")
 
-# Shutdown
+# 終了
 await source.stop()
 ```

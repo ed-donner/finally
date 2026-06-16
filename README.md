@@ -1,62 +1,62 @@
-# FinAlly — AI Trading Workstation
+# FinAlly — AI トレーディングワークステーション
 
-A visually stunning AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM chat assistant that can analyze positions and execute trades via natural language.
+ライブマーケットデータをストリーミングし、ポートフォリオ取引をシミュレートし、ポジションを分析して自然言語で取引を実行できる LLM チャットアシスタントを統合した、視覚的に美しい AI 搭載トレーディングワークステーション。
 
-Built entirely by coding agents as a capstone project for an agentic AI coding course.
+エージェント AI コーディングコースのキャップストーンプロジェクトとして、コーディングエージェントのみによって構築されています。
 
-## Features
+## 機能
 
-- **Live price streaming** via SSE with green/red flash animations
-- **Simulated portfolio** — $10k virtual cash, market orders, instant fills
-- **Portfolio visualizations** — heatmap (treemap), P&L chart, positions table
-- **AI chat assistant** — analyzes holdings, suggests and auto-executes trades
-- **Watchlist management** — track tickers manually or via AI
-- **Dark terminal aesthetic** — Bloomberg-inspired, data-dense layout
+- **ライブ価格ストリーミング** — SSE による緑/赤フラッシュアニメーション
+- **シミュレートポートフォリオ** — 仮想現金 $10k、成行注文、即時約定
+- **ポートフォリオ可視化** — ヒートマップ（ツリーマップ）、損益チャート、ポジションテーブル
+- **AI チャットアシスタント** — 保有株の分析、取引の提案と自動実行
+- **ウォッチリスト管理** — 手動または AI 経由でティッカーを追跡
+- **ダークターミナル外観** — Bloomberg 風のデータ密度の高いレイアウト
 
-## Architecture
+## アーキテクチャ
 
-Single Docker container serving everything on port 8000:
+ポート 8000 ですべてを提供する単一の Docker コンテナ:
 
-- **Frontend**: Next.js (static export) with TypeScript and Tailwind CSS
-- **Backend**: FastAPI (Python/uv) with SSE streaming
-- **Database**: SQLite with lazy initialization
-- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
-- **Market data**: Built-in GBM simulator (default) or Massive API (optional)
+- **フロントエンド**: Next.js（静的エクスポート）、TypeScript、Tailwind CSS
+- **バックエンド**: FastAPI（Python/uv）、SSE ストリーミング
+- **データベース**: SQLite（遅延初期化）
+- **AI**: LiteLLM → OpenRouter（Cerebras 推論）、構造化出力
+- **マーケットデータ**: 組み込み GBM シミュレーター（デフォルト）または Massive API（オプション）
 
-## Quick Start
+## クイックスタート
 
 ```bash
-# Clone and configure
+# クローンして設定
 cp .env.example .env
-# Add your OPENROUTER_API_KEY to .env
+# .env に OPENROUTER_API_KEY を追加
 
-# Run with Docker
+# Docker で実行
 docker build -t finally .
 docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
 
-# Open http://localhost:8000
+# http://localhost:8000 を開く
 ```
 
-## Environment Variables
+## 環境変数
 
-| Variable | Required | Description |
+| 変数 | 必須 | 説明 |
 |---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
-| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
+| `OPENROUTER_API_KEY` | 必須 | AI チャット用 OpenRouter API キー |
+| `MASSIVE_API_KEY` | 任意 | 実際のマーケットデータ用 Massive（Polygon.io）キー。省略時はシミュレーターを使用 |
+| `LLM_MOCK` | 任意 | `true` に設定すると決定論的なモック LLM 応答を返す（テスト用） |
 
-## Project Structure
+## プロジェクト構造
 
 ```
 finally/
-├── frontend/    # Next.js static export
-├── backend/     # FastAPI uv project
-├── planning/    # Project documentation and agent contracts
-├── test/        # Playwright E2E tests
-├── db/          # SQLite volume mount (runtime)
-└── scripts/     # Start/stop helpers
+├── frontend/    # Next.js 静的エクスポート
+├── backend/     # FastAPI uv プロジェクト
+├── planning/    # プロジェクトドキュメントとエージェント契約
+├── test/        # Playwright E2E テスト
+├── db/          # SQLite ボリュームマウント（実行時）
+└── scripts/     # 起動/停止ヘルパー
 ```
 
-## License
+## ライセンス
 
-See [LICENSE](LICENSE).
+[LICENSE](LICENSE) を参照してください。

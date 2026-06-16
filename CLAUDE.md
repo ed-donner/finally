@@ -1,7 +1,7 @@
-# FinAlly Project - the Finance Ally
+# FinAlly プロジェクト - Finance Ally
 
-All project documentation is in the `planning` directory.
+プロジェクトのドキュメントはすべて `planning` ディレクトリにあります。
 
-The key document is PLAN.md included in full below; the market data component has been completed and is summarized in the file `planning/MARKET_DATA_SUMMARY.md` with more details in the `planning/archive` folder. Consult these docs only when required. The remainder of the platform is still to be developed.
+主要ドキュメントは以下に全文掲載されている PLAN.md です。マーケットデータコンポーネントは完成しており、`planning/MARKET_DATA_SUMMARY.md` にサマリーが、`planning/archive` フォルダにより詳細な情報があります。これらのドキュメントは必要なときのみ参照してください。プラットフォームの残りの部分はまだ開発中です。
 
 @planning/PLAN.md

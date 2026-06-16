@@ -1,56 +1,56 @@
-# Market Data Backend — Detailed Design
+# マーケットデータバックエンド — 詳細設計
 
-Implementation-ready design for the FinAlly market data subsystem. Covers the unified interface, in-memory price cache, GBM simulator, Massive API client, SSE streaming endpoint, and FastAPI lifecycle integration.
+FinAlly マーケットデータサブシステムの実装準備済み設計書。統一インターフェース、インメモリ価格キャッシュ、GBM シミュレーター、Massive API クライアント、SSE ストリーミングエンドポイント、FastAPI ライフサイクル統合を網羅します。
 
-Everything in this document lives under `backend/app/market/`.
-
----
-
-## Table of Contents
-
-1. [File Structure](#1-file-structure)
-2. [Data Model — `models.py`](#2-data-model)
-3. [Price Cache — `cache.py`](#3-price-cache)
-4. [Abstract Interface — `interface.py`](#4-abstract-interface)
-5. [Seed Prices & Ticker Parameters — `seed_prices.py`](#5-seed-prices--ticker-parameters)
-6. [GBM Simulator — `simulator.py`](#6-gbm-simulator)
-7. [Massive API Client — `massive_client.py`](#7-massive-api-client)
-8. [Factory — `factory.py`](#8-factory)
-9. [SSE Streaming Endpoint — `stream.py`](#9-sse-streaming-endpoint)
-10. [FastAPI Lifecycle Integration](#10-fastapi-lifecycle-integration)
-11. [Watchlist Coordination](#11-watchlist-coordination)
-12. [Testing Strategy](#12-testing-strategy)
-13. [Error Handling & Edge Cases](#13-error-handling--edge-cases)
-14. [Configuration Summary](#14-configuration-summary)
+このドキュメントのすべての内容は `backend/app/market/` に配置されます。
 
 ---
 
-## 1. File Structure
+## 目次
+
+1. [ファイル構造](#1-file-structure)
+2. [データモデル — `models.py`](#2-data-model)
+3. [価格キャッシュ — `cache.py`](#3-price-cache)
+4. [抽象インターフェース — `interface.py`](#4-abstract-interface)
+5. [シード価格とティッカーパラメーター — `seed_prices.py`](#5-seed-prices--ticker-parameters)
+6. [GBM シミュレーター — `simulator.py`](#6-gbm-simulator)
+7. [Massive API クライアント — `massive_client.py`](#7-massive-api-client)
+8. [ファクトリー — `factory.py`](#8-factory)
+9. [SSE ストリーミングエンドポイント — `stream.py`](#9-sse-streaming-endpoint)
+10. [FastAPI ライフサイクル統合](#10-fastapi-lifecycle-integration)
+11. [ウォッチリスト連携](#11-watchlist-coordination)
+12. [テスト戦略](#12-testing-strategy)
+13. [エラー処理とエッジケース](#13-error-handling--edge-cases)
+14. [設定サマリー](#14-configuration-summary)
+
+---
+
+## 1. ファイル構造
 
 ```
 backend/
   app/
     market/
-      __init__.py             # Re-exports: PriceUpdate, PriceCache, MarketDataSource, create_market_data_source
-      models.py               # PriceUpdate dataclass
-      cache.py                # PriceCache (thread-safe in-memory store)
+      __init__.py             # 再エクスポート: PriceUpdate, PriceCache, MarketDataSource, create_market_data_source
+      models.py               # PriceUpdate データクラス
+      cache.py                # PriceCache（スレッドセーフなインメモリストア）
       interface.py            # MarketDataSource ABC
       seed_prices.py          # SEED_PRICES, TICKER_PARAMS, DEFAULT_PARAMS, CORRELATION_GROUPS
       simulator.py            # GBMSimulator + SimulatorDataSource
       massive_client.py       # MassiveDataSource
       factory.py              # create_market_data_source()
-      stream.py               # SSE endpoint (FastAPI router)
+      stream.py               # SSE エンドポイント（FastAPI ルーター）
 ```
 
-Each file has a single responsibility. The `__init__.py` re-exports the public API so that the rest of the backend imports from `app.market` without reaching into submodules.
+各ファイルは単一の責務を持ちます。`__init__.py` がパブリック API を再エクスポートするため、バックエンドの残りの部分はサブモジュールに直接アクセスすることなく `app.market` からインポートできます。
 
 ---
 
-## 2. Data Model
+## 2. データモデル
 
-**File: `backend/app/market/models.py`**
+**ファイル: `backend/app/market/models.py`**
 
-`PriceUpdate` is the only data structure that leaves the market data layer. Every downstream consumer — SSE streaming, portfolio valuation, trade execution — works exclusively with this type.
+`PriceUpdate` はマーケットデータレイヤーから外に出る唯一のデータ構造です。SSE ストリーミング、ポートフォリオ評価、取引実行など、すべての下流コンシューマーがこの型のみを使用します。
 
 ```python
 from __future__ import annotations
@@ -102,20 +102,20 @@ class PriceUpdate:
         }
 ```
 
-### Design decisions
+### 設計判断
 
-- **`frozen=True`**: Price updates are immutable value objects. Once created they never change, which makes them safe to share across async tasks without copying.
-- **`slots=True`**: Minor memory optimization — we create many of these per second.
-- **Computed properties** (`change`, `direction`, `change_percent`): Derived from `price` and `previous_price` so they can never be inconsistent. No risk of a stale `direction` field.
-- **`to_dict()`**: Single serialization point used by both the SSE endpoint and REST API responses.
+- **`frozen=True`**: 価格更新はイミュータブルな値オブジェクトです。一度作成されると変更されないため、コピーなしに非同期タスク間で安全に共有できます。
+- **`slots=True`**: マイナーなメモリ最適化 — 毎秒多数作成されます。
+- **計算プロパティ**（`change`、`direction`、`change_percent`）: `price` と `previous_price` から導出されるため、不整合が発生しません。古い `direction` フィールドのリスクがありません。
+- **`to_dict()`**: SSE エンドポイントと REST API レスポンスの両方で使用される単一のシリアライゼーションポイント。
 
 ---
 
-## 3. Price Cache
+## 3. 価格キャッシュ
 
-**File: `backend/app/market/cache.py`**
+**ファイル: `backend/app/market/cache.py`**
 
-The price cache is the central data hub. Data sources write to it; SSE streaming and portfolio valuation read from it. It must be thread-safe because the simulator/poller may run in a thread pool executor while SSE reads happen on the async event loop.
+価格キャッシュは中央データハブです。データソースが書き込み、SSE ストリーミングとポートフォリオ評価が読み取ります。シミュレーター/ポーラーがスレッドプールエグゼキューターで実行される可能性があり、SSE の読み取りが非同期イベントループで発生するため、スレッドセーフである必要があります。
 
 ```python
 from __future__ import annotations
@@ -195,9 +195,9 @@ class PriceCache:
             return ticker in self._prices
 ```
 
-### Why a version counter?
+### バージョンカウンターが必要な理由
 
-The SSE streaming loop polls the cache every ~500ms. Without a version counter, it would serialize and send all prices every tick even if nothing changed (e.g., Massive API only updates every 15s). The version counter lets the SSE loop skip sends when nothing is new:
+SSE ストリーミングループはキャッシュを ~500ms ごとにポーリングします。バージョンカウンターがなければ、何も変わっていない場合でも（例: Massive API は 15 秒ごとにしか更新しない）、毎ティックすべての価格をシリアライズして送信します。バージョンカウンターにより SSE ループは新しいものがない場合に送信をスキップできます:
 
 ```python
 last_version = -1
@@ -208,18 +208,18 @@ while True:
     await asyncio.sleep(0.5)
 ```
 
-### Thread safety rationale
+### スレッドセーフの根拠
 
-The `threading.Lock` is used instead of `asyncio.Lock` because:
-- The Massive client's synchronous `get_snapshot_all()` runs in `asyncio.to_thread()`, which operates in a real OS thread — `asyncio.Lock` would not protect against that.
-- The GBM simulator's `step()` is CPU-bound and could also be offloaded to a thread for fairness.
-- `threading.Lock` works correctly from both sync threads and the async event loop.
+`asyncio.Lock` の代わりに `threading.Lock` を使用している理由:
+- Massive クライアントの同期的な `get_snapshot_all()` は `asyncio.to_thread()` で実行されますが、これは実際の OS スレッドで動作します — `asyncio.Lock` はそれに対して保護できません。
+- GBM シミュレーターの `step()` は CPU バウンドであり、公平性のためにスレッドにオフロードされる可能性があります。
+- `threading.Lock` は同期スレッドと非同期イベントループの両方から正しく動作します。
 
 ---
 
-## 4. Abstract Interface
+## 4. 抽象インターフェース
 
-**File: `backend/app/market/interface.py`**
+**ファイル: `backend/app/market/interface.py`**
 
 ```python
 from __future__ import annotations
@@ -279,17 +279,17 @@ class MarketDataSource(ABC):
         """Return the current list of actively tracked tickers."""
 ```
 
-### Why the source writes to the cache instead of returning prices
+### ソースが価格を返すのではなくキャッシュに書き込む理由
 
-This push model decouples timing. The simulator ticks at 500ms, Massive polls at 15s, but SSE always reads from the cache at its own 500ms cadence. There is no need for the SSE layer to know which data source is active or what its update interval is.
+このプッシュモデルはタイミングを分離します。シミュレーターは 500ms でティック、Massive は 15 秒でポーリングしますが、SSE は常に独自の 500ms カデンスでキャッシュから読み取ります。SSE レイヤーはどのデータソースがアクティブか、その更新間隔が何かを知る必要がありません。
 
 ---
 
-## 5. Seed Prices & Ticker Parameters
+## 5. シード価格とティッカーパラメーター
 
-**File: `backend/app/market/seed_prices.py`**
+**ファイル: `backend/app/market/seed_prices.py`**
 
-Constants only — no logic, no imports beyond stdlib. This file is shared by both the simulator (for initial prices and GBM parameters) and potentially by the Massive client (as fallback prices if the API hasn't responded yet).
+定数のみ — ロジックなし、標準ライブラリ以外のインポートなし。このファイルはシミュレーター（初期価格と GBM パラメーター用）と、潜在的に Massive クライアント（API がまだ応答していない場合のフォールバック価格として）の両方で共有されます。
 
 ```python
 """Seed prices and per-ticker parameters for the market simulator."""
@@ -344,15 +344,15 @@ DEFAULT_CORR = 0.3           # Unknown tickers
 
 ---
 
-## 6. GBM Simulator
+## 6. GBM シミュレーター
 
-**File: `backend/app/market/simulator.py`**
+**ファイル: `backend/app/market/simulator.py`**
 
-This file contains two classes:
-- `GBMSimulator`: Pure math engine. Stateful — holds current prices and advances them one step at a time.
-- `SimulatorDataSource`: The `MarketDataSource` implementation that wraps `GBMSimulator` in an async loop and writes to the `PriceCache`.
+このファイルには 2 つのクラスが含まれます:
+- `GBMSimulator`: 純粋な数学エンジン。ステートフル — 現在の価格を保持し、一度に 1 ステップ進めます。
+- `SimulatorDataSource`: `GBMSimulator` を非同期ループでラップし `PriceCache` に書き込む `MarketDataSource` 実装。
 
-### 6.1 GBMSimulator — The Math Engine
+### 6.1 GBMSimulator — 数学エンジン
 
 ```python
 from __future__ import annotations
@@ -549,7 +549,7 @@ class GBMSimulator:
         return CROSS_GROUP_CORR
 ```
 
-### 6.2 SimulatorDataSource — Async Wrapper
+### 6.2 SimulatorDataSource — 非同期ラッパー
 
 ```python
 class SimulatorDataSource(MarketDataSource):
@@ -625,19 +625,19 @@ class SimulatorDataSource(MarketDataSource):
             await asyncio.sleep(self._interval)
 ```
 
-### Key behaviors
+### 主要な動作
 
-- **Immediate seeding**: When `start()` is called, the cache is populated with seed prices *before* the loop begins. This means the SSE endpoint has data to send on its very first tick, with no blank-screen delay.
-- **Graceful cancellation**: `stop()` cancels the task and awaits it, catching `CancelledError`. This ensures clean shutdown during FastAPI lifespan teardown.
-- **Exception resilience**: The loop catches exceptions per-step so a single bad tick doesn't kill the entire data feed.
+- **即時シーディング**: `start()` が呼び出されると、ループが始まる*前に*キャッシュにシード価格が投入されます。これにより SSE エンドポイントは最初のティックで送信するデータを持ち、ブランクスクリーンの遅延が発生しません。
+- **グレースフルなキャンセル**: `stop()` はタスクをキャンセルして await し、`CancelledError` をキャッチします。これにより FastAPI ライフサイクルのティアダウン中にクリーンなシャットダウンが保証されます。
+- **例外への耐性**: ループはステップごとに例外をキャッチするため、単一の不良ティックがデータフィード全体を停止させません。
 
 ---
 
-## 7. Massive API Client
+## 7. Massive API クライアント
 
-**File: `backend/app/market/massive_client.py`**
+**ファイル: `backend/app/market/massive_client.py`**
 
-Polls the Massive (formerly Polygon.io) REST API snapshot endpoint on a configurable interval. The synchronous Massive client runs in `asyncio.to_thread()` to avoid blocking the event loop.
+設定可能な間隔で Massive（旧 Polygon.io）REST API スナップショットエンドポイントをポーリングします。同期的な Massive クライアントはイベントループのブロックを避けるために `asyncio.to_thread()` で実行されます。
 
 ```python
 from __future__ import annotations
@@ -772,30 +772,30 @@ class MassiveDataSource(MarketDataSource):
         )
 ```
 
-### Error handling philosophy
+### エラー処理の方針
 
-The Massive poller is intentionally resilient:
+Massive ポーラーは意図的に耐障害性があります:
 
-| Error | Behavior |
+| エラー | 動作 |
 |-------|----------|
-| **401 Unauthorized** | Logged as error. Poller keeps running (user might fix `.env` and restart). |
-| **429 Rate Limited** | Logged as error. Next poll retries after `poll_interval` seconds. |
-| **Network timeout** | Logged as error. Retries automatically on next cycle. |
-| **Malformed snapshot** | Individual ticker skipped with warning. Other tickers still processed. |
-| **All tickers fail** | Cache retains last-known prices. SSE keeps streaming stale data (better than no data). |
+| **401 認証エラー** | エラーとしてログ。ポーラーは実行継続（ユーザーが `.env` を修正して再起動する可能性あり）。 |
+| **429 レート制限** | エラーとしてログ。次のポーリングは `poll_interval` 秒後にリトライ。 |
+| **ネットワークタイムアウト** | エラーとしてログ。次のサイクルで自動的にリトライ。 |
+| **不正なスナップショット** | 個別のティッカーを警告とともにスキップ。他のティッカーは引き続き処理。 |
+| **全ティッカー失敗** | キャッシュは最後に知られた価格を保持。SSE は古いデータをストリーミング継続（データなしより良い）。 |
 
-### Lazy import strategy
+### 遅延インポート戦略
 
-`from massive import RESTClient` happens inside `start()`, not at module import time. This means:
-- The `massive` package is only required when `MASSIVE_API_KEY` is set.
-- Students who don't have a Massive API key don't need the package installed at all.
-- The simulator path has zero external dependencies beyond `numpy`.
+`from massive import RESTClient` はモジュールインポート時ではなく `start()` 内で行われます。これにより:
+- `massive` パッケージは `MASSIVE_API_KEY` が設定されている場合にのみ必要。
+- Massive API キーを持たない学生はパッケージをインストールする必要がない。
+- シミュレーターパスは `numpy` 以外の外部依存関係がゼロ。
 
 ---
 
-## 8. Factory
+## 8. ファクトリー
 
-**File: `backend/app/market/factory.py`**
+**ファイル: `backend/app/market/factory.py`**
 
 ```python
 from __future__ import annotations
@@ -831,21 +831,21 @@ def create_market_data_source(price_cache: PriceCache) -> MarketDataSource:
         return SimulatorDataSource(price_cache=price_cache)
 ```
 
-### Usage at app startup
+### アプリ起動時の使用方法
 
 ```python
 price_cache = PriceCache()
 source = create_market_data_source(price_cache)
-await source.start(initial_tickers)  # e.g., ["AAPL", "GOOGL", ...]
+await source.start(initial_tickers)  # 例: ["AAPL", "GOOGL", ...]
 ```
 
 ---
 
-## 9. SSE Streaming Endpoint
+## 9. SSE ストリーミングエンドポイント
 
-**File: `backend/app/market/stream.py`**
+**ファイル: `backend/app/market/stream.py`**
 
-The SSE endpoint is a FastAPI route that holds open a long-lived HTTP connection and pushes price updates to the client as `text/event-stream`.
+SSE エンドポイントは長期 HTTP 接続を保持し、`text/event-stream` として価格更新をクライアントにプッシュする FastAPI ルートです。
 
 ```python
 from __future__ import annotations
@@ -938,36 +938,36 @@ async def _generate_events(
         logger.info("SSE stream cancelled for: %s", client_ip)
 ```
 
-### SSE wire format
+### SSE ワイヤーフォーマット
 
-Each event the client receives looks like this:
+クライアントが受信する各イベントは次のようになります:
 
 ```
 data: {"AAPL":{"ticker":"AAPL","price":190.50,"previous_price":190.42,"timestamp":1707580800.5,"change":0.08,"change_percent":0.042,"direction":"up"},"GOOGL":{"ticker":"GOOGL","price":175.12,...}}
 
 ```
 
-The client parses this with:
+クライアントはこれを次のようにパースします:
 
 ```javascript
 const eventSource = new EventSource('/api/stream/prices');
 eventSource.onmessage = (event) => {
     const prices = JSON.parse(event.data);
-    // prices is { "AAPL": { ticker, price, previous_price, ... }, ... }
+    // prices は { "AAPL": { ticker, price, previous_price, ... }, ... }
 };
 ```
 
-### Why poll-and-push instead of event-driven?
+### イベント駆動ではなくポールアンドプッシュを使う理由
 
-The SSE endpoint polls the cache on a fixed interval rather than being notified by the data source. This is simpler and produces predictable, evenly-spaced updates for the frontend. The frontend accumulates these into sparkline charts — regular spacing is important for clean visualization.
+SSE エンドポイントはデータソースから通知を受け取るのではなく、固定間隔でキャッシュをポーリングします。これはシンプルで、フロントエンドに均等に間隔を置いた更新を生成します。フロントエンドはこれらをスパークラインチャートに蓄積します — 規則的な間隔はクリーンな可視化のために重要です。
 
 ---
 
-## 10. FastAPI Lifecycle Integration
+## 10. FastAPI ライフサイクル統合
 
-The market data system starts and stops with the FastAPI application using the `lifespan` context manager pattern.
+マーケットデータシステムは `lifespan` コンテキストマネージャーパターンを使って FastAPI アプリケーションとともに起動/停止します。
 
-**In `backend/app/main.py`:**
+**`backend/app/main.py` 内:**
 
 ```python
 from contextlib import asynccontextmanager
@@ -1020,9 +1020,9 @@ def get_market_source() -> MarketDataSource:
     return app.state.market_source
 ```
 
-### Accessing market data from other routes
+### 他のルートからのマーケットデータアクセス
 
-Other parts of the backend (trade execution, portfolio valuation, watchlist management) access the price cache and data source via FastAPI's dependency injection:
+バックエンドの他の部分（取引実行、ポートフォリオ評価、ウォッチリスト管理）は FastAPI の依存性注入経由で価格キャッシュとデータソースにアクセスします:
 
 ```python
 from fastapi import APIRouter, Depends
@@ -1065,35 +1065,35 @@ async def remove_from_watchlist(
 
 ---
 
-## 11. Watchlist Coordination
+## 11. ウォッチリスト連携
 
-When the watchlist changes (via REST API or LLM chat), the market data source must be notified so it tracks the right set of tickers.
+ウォッチリストが変更されると（REST API または LLM チャット経由）、マーケットデータソースに正しいティッカーセットを追跡するよう通知する必要があります。
 
-### Flow: Adding a Ticker
+### フロー: ティッカーの追加
 
 ```
-User (or LLM) → POST /api/watchlist {ticker: "PYPL"}
-  → Insert into watchlist table (SQLite)
+ユーザー（または LLM）→ POST /api/watchlist {ticker: "PYPL"}
+  → ウォッチリストテーブル（SQLite）に挿入
   → await source.add_ticker("PYPL")
-      Simulator: adds to GBMSimulator, rebuilds Cholesky, seeds cache
-      Massive: appends to ticker list, appears on next poll
-  → Return success (ticker + current price if available)
+      シミュレーター: GBMSimulator に追加、コレスキーを再構築、キャッシュにシード
+      Massive: ティッカーリストに追加、次のポーリングで反映
+  → 成功を返す（ティッカー + 利用可能であれば現在価格）
 ```
 
-### Flow: Removing a Ticker
+### フロー: ティッカーの削除
 
 ```
-User (or LLM) → DELETE /api/watchlist/PYPL
-  → Delete from watchlist table (SQLite)
+ユーザー（または LLM）→ DELETE /api/watchlist/PYPL
+  → ウォッチリストテーブル（SQLite）から削除
   → await source.remove_ticker("PYPL")
-      Simulator: removes from GBMSimulator, rebuilds Cholesky, removes from cache
-      Massive: removes from ticker list, removes from cache
-  → Return success
+      シミュレーター: GBMSimulator から削除、コレスキーを再構築、キャッシュから削除
+      Massive: ティッカーリストから削除、キャッシュから削除
+  → 成功を返す
 ```
 
-### Edge case: Ticker has an open position
+### エッジケース: ティッカーにオープンポジションがある
 
-If the user removes a ticker from the watchlist but still holds shares, the ticker should remain in the data source so portfolio valuation stays accurate. The watchlist route should check for this:
+ユーザーがウォッチリストからティッカーを削除しても株を保有している場合、ポートフォリオ評価が正確であり続けるようにデータソースにティッカーを残す必要があります。ウォッチリストルートはこれを確認する必要があります:
 
 ```python
 @router.delete("/watchlist/{ticker}")
@@ -1114,11 +1114,11 @@ async def remove_from_watchlist(
 
 ---
 
-## 12. Testing Strategy
+## 12. テスト戦略
 
-### 12.1 Unit Tests for GBMSimulator
+### 12.1 GBMSimulator のユニットテスト
 
-**File: `backend/tests/market/test_simulator.py`**
+**ファイル: `backend/tests/market/test_simulator.py`**
 
 ```python
 import math
@@ -1194,9 +1194,9 @@ class TestGBMSimulator:
         assert sim._cholesky is not None  # Now 2 tickers, matrix exists
 ```
 
-### 12.2 Unit Tests for PriceCache
+### 12.2 PriceCache のユニットテスト
 
-**File: `backend/tests/market/test_cache.py`**
+**ファイル: `backend/tests/market/test_cache.py`**
 
 ```python
 import pytest
@@ -1260,9 +1260,9 @@ class TestPriceCache:
         assert cache.get_price("NOPE") is None
 ```
 
-### 12.3 Integration Test: SimulatorDataSource
+### 12.3 統合テスト: SimulatorDataSource
 
-**File: `backend/tests/market/test_simulator_source.py`**
+**ファイル: `backend/tests/market/test_simulator_source.py`**
 
 ```python
 import asyncio
@@ -1324,9 +1324,9 @@ class TestSimulatorDataSource:
         await source.stop()
 ```
 
-### 12.4 Unit Test: MassiveDataSource (Mocked)
+### 12.4 ユニットテスト: MassiveDataSource（モック使用）
 
-**File: `backend/tests/market/test_massive.py`**
+**ファイル: `backend/tests/market/test_massive.py`**
 
 ```python
 import asyncio
@@ -1405,15 +1405,15 @@ class TestMassiveDataSource:
 
 ---
 
-## 13. Error Handling & Edge Cases
+## 13. エラー処理とエッジケース
 
-### 13.1 Startup: Empty Watchlist
+### 13.1 起動: 空のウォッチリスト
 
-If the database has no watchlist entries (user deleted everything), `start()` receives an empty list. Both data sources handle this gracefully — the simulator produces no prices, the Massive poller skips its API call. The SSE endpoint sends empty events. When the user adds a ticker, the source starts tracking it immediately.
+データベースにウォッチリストエントリーがない場合（ユーザーがすべて削除した）、`start()` は空のリストを受け取ります。両データソースはこれをグレースフルに処理します — シミュレーターは価格を生成せず、Massive ポーラーは API 呼び出しをスキップします。SSE エンドポイントは空のイベントを送信します。ユーザーがティッカーを追加すると、ソースはすぐに追跡を開始します。
 
-### 13.2 Price Cache Miss During Trade
+### 13.2 取引中の価格キャッシュミス
 
-If a user tries to trade a ticker that has no cached price (e.g., just added to watchlist, Massive hasn't polled yet):
+ユーザーがキャッシュされた価格のないティッカーを取引しようとした場合（例: ウォッチリストに追加されたばかりで Massive がまだポーリングしていない）:
 
 ```python
 price = price_cache.get_price(ticker)
@@ -1424,44 +1424,44 @@ if price is None:
     )
 ```
 
-The simulator avoids this by seeding the cache in `add_ticker()`. The Massive client may have a brief gap — the HTTP 400 with a clear message is the correct response.
+シミュレーターは `add_ticker()` でキャッシュにシードすることでこれを回避します。Massive クライアントには短いギャップが発生する可能性があります — 明確なメッセージを含む HTTP 400 が正しいレスポンスです。
 
-### 13.3 Massive API Key Invalid
+### 13.3 Massive API キーが無効
 
-If the API key is set but invalid, the first poll will fail with a 401. The poller logs the error and keeps retrying. The SSE endpoint streams empty data. The user sees no prices and a connection status indicator showing "connected" (SSE is working, just no data). The fix is to correct the API key and restart.
+API キーが設定されているが無効な場合、最初のポーリングが 401 で失敗します。ポーラーはエラーをログに記録して再試行し続けます。SSE エンドポイントは空のデータをストリーミングします。ユーザーは価格が表示されず、「接続済み」を示す接続状態インジケーターが表示されます（SSE は動作しているが、データがない）。修正は API キーを正しく設定して再起動することです。
 
-### 13.4 Thread Safety Under Load
+### 13.4 負荷下でのスレッドセーフ
 
-The `PriceCache` uses `threading.Lock` which is a mutex — only one thread can hold it at a time. Under normal load (10 tickers, 2 updates/sec), lock contention is negligible. The critical section is tiny (dict lookup + assignment).
+`PriceCache` は `threading.Lock` を使用します。これはミューテックスで、一度に 1 つのスレッドしか保持できません。通常の負荷（10 ティッカー、2 更新/秒）では、ロックの競合は無視できます。クリティカルセクションは非常に小さい（辞書のルックアップ + 代入）。
 
-If this ever became a bottleneck (hundreds of tickers, many concurrent SSE readers), the fix would be a `ReadWriteLock` — but that level of optimization is unnecessary for this project.
+これがボトルネックになった場合（数百のティッカー、多数の同時 SSE リーダー）、修正は `ReadWriteLock` になりますが、このプロジェクトにはそのレベルの最適化は不要です。
 
-### 13.5 Simulator Precision
+### 13.5 シミュレーターの精度
 
-GBM with tiny `dt` produces very small per-tick moves. Floating-point precision is not a concern because:
-- Prices are `round()`ed to 2 decimal places in `GBMSimulator.step()`
-- The exponential formulation (`exp(drift + diffusion)`) is numerically stable
-- Prices are always positive (exponential function)
+微小な `dt` の GBM は非常に小さなティックあたりの移動を生成します。浮動小数点精度は問題ではありません:
+- 価格は `GBMSimulator.step()` で小数点以下 2 桁に `round()` される
+- 指数計算（`exp(drift + diffusion)`）は数値的に安定
+- 価格は常に正（指数関数）
 
 ---
 
-## 14. Configuration Summary
+## 14. 設定サマリー
 
-All tunable parameters and their defaults:
+すべての調整可能なパラメーターとそのデフォルト:
 
-| Parameter | Location | Default | Description |
+| パラメーター | 場所 | デフォルト | 説明 |
 |-----------|----------|---------|-------------|
-| `MASSIVE_API_KEY` | Environment variable | `""` (empty) | If set, use Massive API; otherwise use simulator |
-| `update_interval` | `SimulatorDataSource.__init__` | `0.5` (seconds) | Time between simulator ticks |
-| `poll_interval` | `MassiveDataSource.__init__` | `15.0` (seconds) | Time between Massive API polls |
-| `event_probability` | `GBMSimulator.__init__` | `0.001` | Chance of a random shock event per ticker per tick |
-| `dt` | `GBMSimulator.__init__` | `~8.5e-8` | GBM time step (fraction of a trading year) |
-| SSE push interval | `_generate_events()` | `0.5` (seconds) | Time between SSE pushes to the client |
-| SSE retry directive | `_generate_events()` | `1000` (ms) | Browser EventSource reconnection delay |
+| `MASSIVE_API_KEY` | 環境変数 | `""`（空） | 設定すると Massive API を使用; それ以外はシミュレーターを使用 |
+| `update_interval` | `SimulatorDataSource.__init__` | `0.5`（秒） | シミュレーターティック間の時間 |
+| `poll_interval` | `MassiveDataSource.__init__` | `15.0`（秒） | Massive API ポーリング間の時間 |
+| `event_probability` | `GBMSimulator.__init__` | `0.001` | ティックあたりティッカーあたりのランダムショックイベントの確率 |
+| `dt` | `GBMSimulator.__init__` | `~8.5e-8` | GBM タイムステップ（取引年の端数） |
+| SSE プッシュ間隔 | `_generate_events()` | `0.5`（秒） | クライアントへの SSE プッシュ間の時間 |
+| SSE リトライディレクティブ | `_generate_events()` | `1000`（ミリ秒） | ブラウザ EventSource 再接続遅延 |
 
-### Package `__init__.py`
+### パッケージ `__init__.py`
 
-**File: `backend/app/market/__init__.py`**
+**ファイル: `backend/app/market/__init__.py`**
 
 ```python
 """Market data subsystem for FinAlly.

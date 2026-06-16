@@ -1,55 +1,55 @@
-# FinAlly Backend
+# FinAlly バックエンド
 
-FastAPI backend for the FinAlly AI Trading Workstation.
+FinAlly AI トレーディングワークステーションの FastAPI バックエンド。
 
-## Structure
+## 構造
 
-- `app/` - Application code
-  - `market/` - Market data subsystem
-    - `models.py` - PriceUpdate dataclass
-    - `cache.py` - Thread-safe price cache
-    - `interface.py` - MarketDataSource abstract interface
-    - `simulator.py` - GBM-based market simulator
-    - `massive_client.py` - Massive/Polygon.io API client
-    - `factory.py` - Data source factory
-    - `stream.py` - SSE streaming endpoint
-    - `seed_prices.py` - Default ticker prices and parameters
+- `app/` - アプリケーションコード
+  - `market/` - マーケットデータサブシステム
+    - `models.py` - PriceUpdate データクラス
+    - `cache.py` - スレッドセーフな価格キャッシュ
+    - `interface.py` - MarketDataSource 抽象インターフェース
+    - `simulator.py` - GBM ベースのマーケットシミュレーター
+    - `massive_client.py` - Massive/Polygon.io API クライアント
+    - `factory.py` - データソースファクトリー
+    - `stream.py` - SSE ストリーミングエンドポイント
+    - `seed_prices.py` - デフォルトティッカー価格とパラメーター
 
-- `tests/` - Unit and integration tests
-  - `market/` - Market data tests
+- `tests/` - ユニットテストと統合テスト
+  - `market/` - マーケットデータテスト
 
-## Running Tests
+## テストの実行
 
 ```bash
-# Install dependencies
+# 依存関係のインストール
 uv sync --dev
 
-# Run all tests
+# 全テストの実行
 uv run pytest
 
-# Run with coverage
+# カバレッジ付きで実行
 uv run pytest --cov=app --cov-report=html
 
-# Run specific test file
+# 特定のテストファイルを実行
 uv run pytest tests/market/test_simulator.py
 
-# Run with verbose output
+# 詳細出力で実行
 uv run pytest -v
 ```
 
-## Environment Variables
+## 環境変数
 
-- `MASSIVE_API_KEY` - Optional. If set, use real market data from Massive API. If not set, use the built-in simulator.
+- `MASSIVE_API_KEY` - 任意。設定すると Massive API から実際のマーケットデータを使用。未設定の場合は組み込みシミュレーターを使用。
 
-## Development
+## 開発
 
 ```bash
-# Install dependencies
+# 依存関係のインストール
 uv sync --dev
 
-# Run linter
+# リンターの実行
 uv run ruff check .
 
-# Format code
+# コードのフォーマット
 uv run ruff format .
 ```
