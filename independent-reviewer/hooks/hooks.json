@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "/doc-review planning/REVIEW.md"
+          },
+          {
+            "type": "agent",
+            "prompt": "/doc-review README.md"
+          }
+        ]
+      }
+    ]
+  }
+}
