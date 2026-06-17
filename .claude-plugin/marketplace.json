@@ -1,8 +1,12 @@
 {
-
+    "name": "finally-plugin-marketplace",
+    "owner": {
+        "name": "Shuta-Misaka"
+    },
     "plugins": [
         {
-            "name": "Independent Reviewer",
+            "name": "independent-reviewer",
+            "displayName": "Independent Reviewer",
             "source": "./independent-reviewer",
             "description": "A plugin that provides independent reviews and feedback on various topics, products, or services.",
             "version": "1.0.0"

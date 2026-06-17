@@ -1,8 +1,8 @@
 {
   "hooks": {
-    "Stop": [
+    "PostToolUse": [
       {
-        "matcher": "",
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "agent",
