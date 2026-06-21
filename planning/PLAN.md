@@ -168,6 +168,7 @@ Both the simulator and the Massive client implement the same abstract interface.
 
 - A single background task (simulator or Massive poller) writes to an in-memory price cache
 - The cache holds the latest price, previous price, and timestamp for each ticker
+- **Priced ticker set** — the source tracks `watchlist ∪ tickers-with-an-open-position`. The API layer keeps this in sync: watchlist add/remove calls `source.add_ticker`/`source.remove_ticker`, and a buy that opens a new position adds its ticker. A watchlisted ticker the user still holds stays priced even after it's removed from the watchlist, until the position is closed — this guarantees every position always has a live price for valuation and P&L.
 - SSE streams read from this cache and push updates to connected clients
 - This architecture supports future multi-user scenarios without changes to the data layer
 
@@ -175,7 +176,8 @@ Both the simulator and the Massive client implement the same abstract interface.
 
 - Endpoint: `GET /api/stream/prices`
 - Long-lived SSE connection; client uses native `EventSource` API
-- Server pushes price updates for all tickers known to the system at a regular cadence (~500ms) — in the single-user model this is equivalent to the user's watchlist
+- The server pushes a ticker's update **only when its price actually changes** — the cache carries a version counter for change detection, so a slow source like Massive's 15s poll never emits redundant events
+- A periodic heartbeat (an SSE comment line, every few seconds) keeps the connection and the header's connection-status indicator alive during quiet periods
 - Each SSE event contains ticker, price, previous price, timestamp, and change direction
 - Client handles reconnection automatically (EventSource has built-in retry)
 
@@ -215,6 +217,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 - `avg_cost` REAL
 - `updated_at` TEXT (ISO timestamp)
 - UNIQUE constraint on `(user_id, ticker)`
+- When a sell reduces quantity to 0, the row is **deleted** — there are no zero-quantity rows, so the positions table and heatmap stay clean.
 
 **trades** — Trade history (append-only log)
 - `id` TEXT PRIMARY KEY (UUID)
@@ -225,7 +228,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 - `price` REAL
 - `executed_at` TEXT (ISO timestamp)
 
-**portfolio_snapshots** — Portfolio value over time (for P&L chart). Recorded every 30 seconds by a background task, and immediately after each trade execution.
+**portfolio_snapshots** — Portfolio value over time (for P&L chart). Recorded every 30 seconds by a background task, immediately after each trade execution, and once at startup so the P&L chart is never empty on first launch.
 - `id` TEXT PRIMARY KEY (UUID)
 - `user_id` TEXT (default: `"default"`)
 - `total_value` REAL
@@ -236,7 +239,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 - `user_id` TEXT (default: `"default"`)
 - `role` TEXT (`"user"` or `"assistant"`)
 - `content` TEXT
-- `actions` TEXT (JSON — trades executed, watchlist changes made; null for user messages)
+- `actions` TEXT (JSON — trades executed, **rejected trades with their validation error**, and watchlist changes made; null for user messages)
 - `created_at` TEXT (ISO timestamp)
 
 ### Default Seed Data
@@ -260,12 +263,16 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 | POST | `/api/portfolio/trade` | Execute a trade: `{ticker, quantity, side}` |
 | GET | `/api/portfolio/history` | Portfolio value snapshots over time (for P&L chart) |
 
+`quantity` may be fractional. Share quantities are stored to 4 decimal places and cash math is rounded to cents. A sell that brings a position to 0 deletes the position row (§7).
+
 ### Watchlist
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/watchlist` | Current watchlist tickers with latest prices |
 | POST | `/api/watchlist` | Add a ticker: `{ticker}` |
 | DELETE | `/api/watchlist/{ticker}` | Remove a ticker |
+
+Both endpoints keep the market source's ticker set in sync (§6). Removing a ticker the user still holds succeeds, but the ticker remains priced until the position is closed.
 
 ### Chat
 | Method | Path | Description |
@@ -290,7 +297,7 @@ There is an OPENROUTER_API_KEY in the .env file in the project root.
 When the user sends a chat message, the backend:
 
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
-2. Loads recent conversation history from the `chat_messages` table
+2. Loads recent conversation history from the `chat_messages` table — the last 20 messages — to bound context size and per-turn cost
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
 4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
 5. Parses the complete structured JSON response
@@ -325,7 +332,7 @@ Trades specified by the LLM execute automatically — no confirmation dialog. Th
 - It creates an impressive, fluid demo experience
 - It demonstrates agentic AI capabilities — the core theme of the course
 
-If a trade fails validation (e.g., insufficient cash), the error is included in the chat response so the LLM can inform the user.
+If a trade fails validation (e.g., insufficient cash), the error is included in the chat response so the LLM can inform the user, and the rejected trade is recorded in that message's `actions` JSON (§7) for debugging.
 
 ### System Prompt Guidance
 
@@ -353,7 +360,7 @@ When `LLM_MOCK=true`, the backend returns deterministic mock responses instead o
 The frontend is a single-page application with a dense, terminal-inspired layout. The specific component architecture and layout system is up to the Frontend Engineer, but the UI should include these elements:
 
 - **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from SSE since page load)
-- **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here.
+- **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here. Like the sparklines, this chart is accumulated client-side from the SSE stream since page load (it resets on refresh) — no historical-price storage or endpoint is needed.
 - **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by P&L (green = profit, red = loss)
 - **P&L chart** — line chart showing total portfolio value over time, using data from `portfolio_snapshots`
 - **Positions table** — tabular view of all positions: ticker, quantity, avg cost, current price, unrealized P&L, % change
@@ -421,6 +428,8 @@ All scripts should be idempotent — safe to run multiple times.
 
 The container is designed to deploy to AWS App Runner, Render, or any container platform. A Terraform configuration for App Runner may be provided in a `deploy/` directory as a stretch goal, but is not part of the core build.
 
+> **Caution:** The app has no authentication, and `/api/chat` calls a paid LLM. This is fine for a local single-user app, but the container must not be exposed publicly as-is — anyone reaching it could run up API cost. Add auth/rate-limiting before any public deployment.
+
 ---
 
 ## 12. Testing Strategy
@@ -444,7 +453,7 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 
 **Infrastructure**: A separate `docker-compose.test.yml` in `test/` that spins up the app container plus a Playwright container. This keeps browser dependencies out of the production image.
 
-**Environment**: Tests run with `LLM_MOCK=true` by default for speed and determinism.
+**Environment**: Tests run with `LLM_MOCK=true` by default for speed and determinism. All scenarios run against the simulator (no `MASSIVE_API_KEY`); the Massive path is a tested-but-secondary integration, and new features are developed and demoed against the simulator.
 
 **Key Scenarios**:
 - Fresh start: default watchlist appears, $10k balance shown, prices are streaming
@@ -454,3 +463,47 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Document Review — Questions, Clarifications & Simplifications
+
+_Added 2026-06-20 during a documentation review. The market data subsystem (§6) is built; everything below concerns the parts still to be developed. The plan is solid and internally consistent — these are the open questions and decisions worth nailing down before the backend/frontend work starts._
+
+### Open questions that affect implementation
+
+1. **Removing a watchlisted ticker you still hold.** If the user owns AAPL and removes it from the watchlist, the market source stops tracking it (`source.remove_ticker`), so the price cache no longer has a price — breaking portfolio valuation and P&L for that position. What should `DELETE /api/watchlist/{ticker}` do when an open position exists? Options: (a) block removal with an error, (b) allow removal but keep pricing the ticker as long as a position exists, (c) decouple "priced tickers" from "watchlist" entirely. **Recommendation: (b)** — the set of priced tickers = `watchlist ∪ tickers-with-positions`. This needs to be stated explicitly; it's the most likely correctness bug in the portfolio path.
+   → **Resolved (b):** folded into §6 (Shared Price Cache) and §8 (Watchlist).
+
+2. **Who wires the watchlist to the market source?** §8 has `POST/DELETE /api/watchlist`, and §6's source exposes `add_ticker`/`remove_ticker`, but nothing states that the watchlist endpoints call them. Confirm the API layer is responsible for keeping the market source's ticker set in sync with the watchlist (plus the position-set from item 1).
+   → **Resolved:** API layer owns the sync; stated in §6 (Shared Price Cache) and §8 (Watchlist).
+
+3. **What does the "main chart" plot, and from where?** §2 and §10 describe a larger detail chart of "price over time," but there is no historical price storage and the simulator has no history. Is the main chart also accumulated client-side from the SSE stream since page load (like the sparklines)? If so, say so — it means a page refresh resets the chart, which is fine but should be a deliberate, documented choice. If real historical bars are wanted, that only works on the Massive path and needs a new endpoint + schema.
+   → **Resolved:** client-accumulated from SSE since page load (resets on refresh), no new endpoint; stated in §10 (Main chart area).
+
+4. **SSE push semantics under slow sources.** §6 says SSE pushes "~500ms." On the Massive free tier prices only change every 15s. Does the stream push only on a version change (the cache already has a version counter), emit periodic heartbeats to keep `EventSource` alive, or push the full snapshot every 500ms regardless? Clarify so the frontend flash logic and the connection-status dot behave correctly.
+   → **Resolved:** push only on a version change, plus periodic heartbeats to keep `EventSource` alive; stated in §6 (SSE Streaming).
+
+5. **How much chat history is loaded?** §9 step 2 says "recent conversation history." Define the cap (last N messages or a token budget). Unbounded growth will eventually blow the context window and inflate cost on every turn.
+   → **Resolved:** last 20 messages; stated in §9 (How It Works, step 2).
+
+6. **Failed AI trades — persisted where?** §9 says a failed trade's error goes into the chat response so the LLM can explain it, but the `actions` column (§7) is described as "trades executed / watchlist changes made." Confirm whether rejected trades are recorded in `actions` (useful for debugging) or only surfaced in the message text.
+   → **Resolved:** rejected trades are recorded in `actions`; stated in §7 (chat_messages) and §9 (Auto-Execution).
+
+7. **Selling the entire position.** §12 says a position "updates or disappears." Pick one: delete the `positions` row when quantity hits 0 (cleaner — avoids zero-quantity rows in the heatmap/table). State it so trade logic and the UI agree.
+   → **Resolved:** delete the `positions` row when quantity hits 0; stated in §7 (positions) and §8 (Portfolio).
+
+### Smaller clarifications
+
+- **Trade quantity type.** Schema supports fractional shares but the §9 example uses integer `10`. Confirm the API accepts and round-trips fractional quantities, and decide on a rounding/precision rule for cash math.
+  → **Resolved:** fractional quantities accepted; shares stored to 4 decimals, cash rounded to cents; stated in §8 (Portfolio).
+- **Cost exposure.** The open `/api/chat` endpoint calls a paid LLM with no auth. Acceptable for a local single-user app, but worth a one-line note that this must not be exposed publicly as-is (relevant to the §11 "optional cloud deployment" stretch goal).
+  → **Resolved:** caution note added to §11 (Optional Cloud Deployment).
+
+### Opportunities to simplify
+
+
+- **Snapshot cadence.** The 30s background snapshot is justified (the P&L chart must move even when the user isn't trading), so keep it — but note that on first launch the P&L chart is empty until the first snapshot lands. A single snapshot taken at startup avoids an awkward empty-chart first impression.
+  → **Resolved:** startup snapshot added to §7 (portfolio_snapshots).
+- **Defer the Massive path in docs, not code.** The Massive client is already built and tested, so no code change is needed — but for the remaining work, all new features (charts, portfolio, chat) should be developed and demoed against the simulator only. Treat Massive as a tested-but-secondary path so it doesn't add surface area to every new feature's testing.
+  → **Resolved:** noted in §12 (E2E Tests, Environment).
