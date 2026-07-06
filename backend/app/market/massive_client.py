@@ -99,8 +99,8 @@ class MassiveDataSource(MarketDataSource):
             for snap in snapshots:
                 try:
                     price = snap.last_trade.price
-                    # Massive timestamps are Unix milliseconds → convert to seconds
-                    timestamp = snap.last_trade.timestamp / 1000.0
+                    # Massive trade timestamps (sip_timestamp) are Unix nanoseconds → convert to seconds
+                    timestamp = snap.last_trade.sip_timestamp / 1_000_000_000
                     self._cache.update(
                         ticker=snap.ticker,
                         price=price,

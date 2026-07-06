@@ -1,0 +1,21 @@
+{
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$(date '+%Y-%m-%d %H:%M:%S') hook fired\" >> /tmp/claude-stop-hook-debug.log; set -a; source /Users/rickhill65/Cursor_Projects/finally/.env 2>/dev/null; set +a; /Users/rickhill65/.hermes/node/bin/codex exec \"Review changes since last commit and write results to a file named planning/REVIEWHOOK.md\" < /dev/null 2>/dev/null || true",
+            "async": true,
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}
