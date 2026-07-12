@@ -59,6 +59,7 @@ The user runs a single Docker command (or a provided start script). A browser op
 │                                                 │
 │  SQLite database (volume-mounted)               │
 │  Background task: market data polling/sim        │
+│  Background task: portfolio snapshot (30s)       │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -101,7 +102,6 @@ finally/
 ├── db/                       # Volume mount target (SQLite file lives here at runtime)
 │   └── .gitkeep              # Directory exists in repo; finally.db is gitignored
 ├── Dockerfile                # Multi-stage build (Node → Python)
-├── docker-compose.yml        # Optional convenience wrapper
 ├── .env                      # Environment variables (gitignored, .env.example committed)
 └── .gitignore
 ```
@@ -154,6 +154,7 @@ Both the simulator and the Massive client implement the same abstract interface.
 - Correlated moves across tickers (e.g., tech stocks move together)
 - Occasional random "events" — sudden 2-5% moves on a ticker for drama
 - Starts from realistic seed prices (e.g., AAPL ~$190, GOOGL ~$175, etc.)
+- For tickers outside the seeded set (e.g. added via the watchlist or by the LLM), the simulator synthesizes default GBM params (a reasonable starting price, drift, and volatility) on the fly rather than rejecting the ticker
 - Runs as an in-process background task — no external dependencies
 
 ### Massive API (Optional)
@@ -236,7 +237,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 - `user_id` TEXT (default: `"default"`)
 - `role` TEXT (`"user"` or `"assistant"`)
 - `content` TEXT
-- `actions` TEXT (JSON — trades executed, watchlist changes made; null for user messages)
+- `actions` TEXT (JSON — successfully executed trades and watchlist changes only; null for user messages and for turns with no executed actions. Failed/rejected trade attempts are not recorded here — they only appear in the assistant's `content` text)
 - `created_at` TEXT (ISO timestamp)
 
 ### Default Seed Data
@@ -290,7 +291,7 @@ There is an OPENROUTER_API_KEY in the .env file in the project root.
 When the user sends a chat message, the backend:
 
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
-2. Loads recent conversation history from the `chat_messages` table
+2. Loads recent conversation history from the `chat_messages` table (for LLM context only — there is no `GET /api/chat` endpoint; the frontend chat panel always starts empty on page load and does not restore prior sessions)
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
 4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
 5. Parses the complete structured JSON response
@@ -309,14 +310,15 @@ The LLM is instructed to respond with JSON matching this schema:
     {"ticker": "AAPL", "side": "buy", "quantity": 10}
   ],
   "watchlist_changes": [
-    {"ticker": "PYPL", "action": "add"}
+    {"ticker": "PYPL", "action": "add"},
+    {"ticker": "NFLX", "action": "remove"}
   ]
 }
 ```
 
 - `message` (required): The conversational text shown to the user
-- `trades` (optional): Array of trades to auto-execute. Each trade goes through the same validation as manual trades (sufficient cash for buys, sufficient shares for sells)
-- `watchlist_changes` (optional): Array of watchlist modifications
+- `trades` (optional): Array of trades to auto-execute. Each trade goes through the same validation as manual trades (sufficient cash for buys, sufficient shares for sells, positive quantity)
+- `watchlist_changes` (optional): Array of watchlist modifications. `action` is `"add"` or `"remove"`
 
 ### Auto-Execution
 
@@ -325,7 +327,7 @@ Trades specified by the LLM execute automatically — no confirmation dialog. Th
 - It creates an impressive, fluid demo experience
 - It demonstrates agentic AI capabilities — the core theme of the course
 
-If a trade fails validation (e.g., insufficient cash), the error is included in the chat response so the LLM can inform the user.
+If a trade fails validation (e.g., insufficient cash, insufficient shares, or a zero/negative quantity — quantities must be strictly positive), the error is included in the chat response so the LLM can inform the user. This same quantity rule applies to manual trades via `POST /api/portfolio/trade`.
 
 ### System Prompt Guidance
 
@@ -353,12 +355,12 @@ When `LLM_MOCK=true`, the backend returns deterministic mock responses instead o
 The frontend is a single-page application with a dense, terminal-inspired layout. The specific component architecture and layout system is up to the Frontend Engineer, but the UI should include these elements:
 
 - **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from SSE since page load)
-- **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here.
+- **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here. Like the sparklines, it accumulates from the SSE stream from the moment a ticker is selected (or page load, for the initially selected ticker) — it starts empty rather than backfilling from a historical-prices endpoint, and fills in progressively.
 - **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by P&L (green = profit, red = loss)
 - **P&L chart** — line chart showing total portfolio value over time, using data from `portfolio_snapshots`
 - **Positions table** — tabular view of all positions: ticker, quantity, avg cost, current price, unrealized P&L, % change
 - **Trade bar** — simple input area: ticker field, quantity field, buy button, sell button. Market orders, instant fill.
-- **AI chat panel** — docked/collapsible sidebar. Message input, scrolling conversation history, loading indicator while waiting for LLM response. Trade executions and watchlist changes shown inline as confirmations.
+- **AI chat panel** — docked/collapsible sidebar. Message input, scrolling conversation history, loading indicator while waiting for LLM response. Trade executions and watchlist changes shown inline as confirmations. The panel starts empty on each page load (no history restore); prior turns are still persisted server-side in `chat_messages` and fed back to the LLM as context, just not rendered in the UI.
 - **Header** — portfolio total value (updating live), connection status indicator, cash balance
 
 ### Technical Notes
@@ -393,13 +395,13 @@ FastAPI serves the static frontend files and all API routes on port 8000.
 
 ### Docker Volume
 
-The SQLite database persists via a named Docker volume:
+The SQLite database persists via a bind mount to the project's `db/` directory:
 
 ```bash
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
+docker run -v "$(pwd)/db:/app/db" -p 8000:8000 --env-file .env finally
 ```
 
-The `db/` directory in the project root maps to `/app/db` in the container. The backend writes `finally.db` to this path.
+The `db/` directory in the project root maps to `/app/db` in the container. The backend writes `finally.db` to this path, so the file is directly inspectable and backed up from the host, and survives `docker rm`/rebuilds without relying on a named volume.
 
 ### Start/Stop Scripts
 
@@ -454,3 +456,4 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
