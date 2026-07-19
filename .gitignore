@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Session scratch / test artifacts
+.playwright-mcp/
+backend/test-results/
+/finally-terminal.png
+/finally-after-trade.png

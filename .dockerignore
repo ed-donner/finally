@@ -1,0 +1,52 @@
+# FinAlly .dockerignore — keep the build context small and reproducible.
+
+# Version control / CI
+.git
+.github
+.gitignore
+
+# Docs & planning (not needed in the image)
+planning
+README.md
+LICENSE
+*.md
+
+# Environment / secrets (never bake into the image)
+.env
+.envrc
+.env.*
+!.env.example
+
+# Python
+**/__pycache__
+**/*.py[codz]
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/htmlcov
+**/.coverage
+**/*.egg-info
+
+# Node / Next.js
+**/node_modules
+**/.next
+**/out
+**/npm-debug.log*
+
+# Runtime database / volume data
+db/*.db
+db/*.db-*
+**/db/*.db
+
+# Editor / OS cruft
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Tests & docker meta (not part of the app image)
+test
+Dockerfile
+.dockerignore
+docker-compose.yml

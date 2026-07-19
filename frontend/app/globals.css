@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-terminal-bg text-terminal-text font-mono antialiased;
+  overflow: hidden; /* the terminal manages its own scroll regions */
+}
+
+/* Thin, terminal-style scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #232d3b transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: #232d3b;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  .panel {
+    @apply bg-terminal-panel border border-terminal-border rounded-lg overflow-hidden flex flex-col;
+  }
+  .panel-title {
+    @apply text-[11px] uppercase tracking-wider text-terminal-muted px-3 py-2 border-b border-terminal-border flex items-center justify-between shrink-0;
+  }
+  .num {
+    @apply tabular-nums;
+  }
+  .btn-buy {
+    @apply bg-up/90 hover:bg-up text-white font-semibold rounded px-3 py-1.5 text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-sell {
+    @apply bg-down/90 hover:bg-down text-white font-semibold rounded px-3 py-1.5 text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-submit {
+    @apply bg-submit hover:bg-submit/80 text-white font-semibold rounded px-3 py-1.5 text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .field {
+    @apply bg-terminal-raised border border-terminal-border rounded px-2 py-1.5 text-sm text-terminal-text placeholder:text-terminal-muted/60 focus:outline-none focus:border-brand;
+  }
+}

@@ -1,0 +1,23 @@
+# FinAlly — convenience wrapper for the single production container.
+# Usage:
+#   docker compose up --build      # build + run on http://localhost:8000
+#   docker compose down            # stop (named volume 'finally-data' persists)
+
+services:
+  finally:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: finally:latest
+    container_name: finally
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # SQLite database persists across restarts via a named volume.
+      - finally-data:/app/db
+    restart: unless-stopped
+
+volumes:
+  finally-data:
