@@ -1,0 +1,48 @@
+# FinAlly — E2E test stack.
+# Brings up the app container in deterministic test mode (LLM_MOCK=true,
+# market simulator, no API keys) alongside a Playwright-capable runner.
+# Browser dependencies stay OUT of the production image by living here.
+#
+# Usage (from the repo root):
+#   docker compose -f test/docker-compose.test.yml up --build --abort-on-container-exit
+#   docker compose -f test/docker-compose.test.yml down -v
+#
+# The `app` service uses an ephemeral (tmpfs) database so every run starts from
+# the freshly seeded default state ($10k cash, 10 default tickers).
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: finally:latest
+    environment:
+      LLM_MOCK: "true"
+      # No OPENROUTER_API_KEY / MASSIVE_API_KEY -> simulator + mock LLM.
+      FINALLY_DB_PATH: /app/db/finally.db
+    # No volume/tmpfs here: /app/db in the image holds schema.sql, and a tmpfs
+    # mount would shadow it (init_db could not find the schema). The container's
+    # own writable layer holds finally.db and is discarded after the run, so each
+    # `up --build` still starts from the freshly seeded default state.
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.48.0-jammy
+    depends_on:
+      app:
+        condition: service_healthy
+    working_dir: /work
+    environment:
+      # Integration Tester's specs should target this base URL.
+      BASE_URL: "http://app:8000"
+      CI: "true"
+    volumes:
+      # Playwright specs, config, and package.json (owned by Integration Tester).
+      - ./:/work
+    # Default: install deps and run the suite. Override on the command line to
+    # drive interactively, e.g. `... run playwright bash`.
+    command: >
+      bash -lc "npm ci && npx playwright test"
