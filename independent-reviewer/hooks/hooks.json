@@ -1,0 +1,15 @@
+{
+"hooks": {
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "{ echo; echo \"## Automated Change Review — $(date -u +\\\"%Y-%m-%dT%H:%M:%SZ\\\")\"; echo; echo '```'; git diff HEAD --stat; echo '```'; } >> \"$(git rev-parse --show-toplevel)/planning/PLAN.md\" 2>/dev/null || true",
+          "statusMessage": "Reviewing changes since last commit..."
+        }
+      ]
+    }
+  ]
+}
+}

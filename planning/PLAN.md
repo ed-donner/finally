@@ -454,3 +454,62 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Doc Review — Questions, Clarifications, Simplification Opportunities
+
+*Added via doc review. Non-blocking; flagging for the product owner / agents to resolve or acknowledge before build-out continues.*
+
+### Questions / Clarifications
+
+- ~~**Fractional shares vs. "market orders only" simplicity (§4, §7)**~~ — **Resolved**: fractional shares are supported end-to-end. The trade bar and the AI's trade schema (§9) should accept non-integer `quantity` values, consistent with `positions.quantity` and `trades.quantity` already being `REAL`.
+- **Selling more than you own / short selling (§7, §12)**: Schema doesn't include a short-position concept, and unit tests mention "selling more than owned" as an edge case to reject — but this isn't stated as a rule anywhere outside the test list. Suggest adding one sentence to §9/§12 confirming: no shorting, sell quantity is capped at current holdings, and the AI must respect this same constraint.
+- **`portfolio_snapshots` cadence vs. price update cadence (§6, §7)**: Prices stream every ~500ms but snapshots are recorded every 30s. Is 30s a firm requirement, or a reasonable-default that implementers can tune? Worth flagging so nobody "fixes" it as a bug later.
+- **AI can act on tickers not in the watchlist?** §9's example shows the AI adding `PYPL` to the watchlist and could presumably also trade a ticker not yet watched. Does a trade require the ticker to already be on the watchlist (so a live price exists), or can the AI trade blind/first add-then-trade in the same turn? Worth a one-line clarification since it affects trade validation logic.
+- **Ticker validation**: no mention of validating tickers against a known universe (real ticker symbols) vs. accepting arbitrary strings. Since the simulator needs seed prices per ticker (§6), what happens if a user/AI adds an unrecognized ticker — rejected, or does the simulator invent a random-walk price for it?
+- **Massive API rate-limit behavior (§6)**: if polling is on a 15s interval and a request fails or rate-limits, is there a fallback (retry, back off, fall back to simulator, or just skip a tick)? Not specified.
+- **`chat_messages.actions` JSON shape**: §7 says this stores "trades executed, watchlist changes made" as JSON but doesn't define the schema, unlike the LLM response schema in §9. Suggest either pointing to the same shape as §9's `trades`/`watchlist_changes` arrays or stating it explicitly, so backend and any future UI rendering agree on the shape.
+- **Health check contents (§8)**: `/api/health` is listed with no definition of what it checks (process alive vs. DB reachable vs. market-data task running). Minor, but worth a line so E2E/Docker healthcheck config knows what "healthy" means.
+
+### Simplification Opportunities
+
+- **`users_profile` as a table for a single hardcoded row**: Given `user_id` is hardcoded to `"default"` everywhere and there's no auth, `users_profile` could arguably be a single JSON blob or config value rather than a full table — but the doc's own rationale (enables future multi-user support without migration) is reasonable, so this is likely intentional. Flagging only so it's not "simplified away" by an agent that doesn't see the forward-compatibility reasoning already in §7.
+- **Two market-data implementations behind one interface (§6)**: solid design already; no simplification needed, but consider explicitly naming the interface (e.g., `MarketDataSource`) in the plan so both the Backend and Market Data agents build to the same named contract rather than converging on it independently.
+- **`docker-compose.yml` marked "optional convenience wrapper" (§4) alongside dedicated start/stop shell scripts**: two ways to launch the same single container (scripts vs. compose) is a bit of redundancy for a course project. Consider dropping one, or explicitly stating compose is only for local dev convenience and scripts are canonical/documented path, to avoid divergence between the two over time.
+- **Section 3's "Why These Choices" table and Section 11's Dockerfile description slightly overlap** (both explain single-container rationale). Not a big deal, but could be trimmed to one cross-reference if the doc grows.
+
+## 14. Doc Review (Round 2) — Additional Questions & Simplification Opportunities
+
+*Second review pass. Builds on §13; the items below were not previously flagged.*
+
+### Questions / Clarifications
+
+- **Deleting a watched ticker you hold a position in (§6, §7, §8)**: `DELETE /api/watchlist/{ticker}` removes a ticker from `watchlist`, but `positions` is a separate table. If a user (or the AI) removes a ticker from the watchlist while still holding shares, does the price cache keep updating it (so P&L can still be computed), or does the position become unpriceable? Suggest stating that any ticker with an open position is implicitly kept "live" in the price cache/SSE feed regardless of watchlist membership.
+- **Floating-point drift on `cash_balance`, `avg_cost`, and `quantity` (§7)**: these are all `REAL` (float) columns accumulating many small trades over a session. Repeated buy/sell/avg-cost recalculation on floats can drift by fractions of a cent. Worth a one-line rule on rounding convention (e.g., round to 2 decimals for cash/price, N decimals for fractional shares) so the Backend agent and any AI-driven trade math agree.
+- **Public cloud deployment vs. no-auth design (§8, §11)**: §11 mentions AWS App Runner/Render as an optional deployment target, but §7/§8 assume a single hardcoded `user_id="default"` with zero authentication and unauthenticated trade/chat endpoints. If this ever gets deployed to a public URL, anyone with the link can trade the (virtual) portfolio and burn the deployer's OpenRouter budget via `/api/chat`. Suggest a one-line caveat that cloud deployment is demo-only / not intended for a public unauthenticated URL, or that it needs at least a shared secret/basic auth in front of it.
+- **No rate limit or cost guard on `/api/chat` (§9)**: each chat call hits a paid LLM API with no mention of per-session or per-day call limits. For a course project this is probably fine, but worth an explicit acknowledgment (or a simple max-messages-per-day guard) so a runaway frontend loop or scripted abuse can't rack up API costs unexpectedly.
+- **SSE fan-out cost as watchlist grows (§6)**: the SSE stream pushes updates for "all tickers known to the system" every ~500ms. Since this is single-user, the ceiling is whatever the user adds to their own watchlist, so it's low-risk — but worth confirming there's no plan to cap watchlist size, since an unbounded watchlist directly scales SSE payload size/frequency.
+- **Chat history growth and prompt size (§9)**: "recent conversation history" is loaded into every LLM call, but no bound is given (last N messages? last N tokens?). Over a long session this could silently grow the prompt and cost/latency. Worth specifying a concrete window (e.g., last 20 messages).
+
+### Simplification Opportunities
+
+- **`chat_messages.actions` as free-form JSON (§7, §9)**: since §9 already defines a precise `trades`/`watchlist_changes` schema for the LLM response, `actions` could just store that exact response object verbatim (minus `message`) rather than being a loosely-specified separate JSON shape — removes an implicit second schema to keep in sync (also raised as an open question in §13, but concretely: reusing the §9 schema literally, not just "the same shape," removes any ambiguity).
+- **Per-ticker seed prices "hardcoded" in the simulator (§6)**: not currently a config file — worth confirming these live in one place (e.g., a `SEED_PRICES` map) rather than scattered across simulator code, so ticker validation (§13's open question) and seeding stay consistent.
+
+## Automated Change Review — 2026-07-16T15:51:51Z
+
+```
+ .claude/settings.json | 13 +++++++++++++
+ planning/PLAN.md      |  4 ++++
+ 2 files changed, 17 insertions(+)
+```
+
+## Automated Change Review — 2026-07-16T15:53:27Z
+
+```
+ .claude/settings.json | 13 +++++++++++++
+ README.md             | 15 +++++++++++++++
+ planning/PLAN.md      | 12 ++++++++++++
+ 3 files changed, 40 insertions(+)
+```

@@ -1,0 +1,13 @@
+{
+  "name": "finally-marketplace",
+  "owner": {
+    "name": "Vincent"
+  },
+  "plugins": [
+    {
+      "name": "independent-reviewer",
+      "source": "./independent-reviewer",
+      "description": "Carry out an independent review of all changes since last commit."
+    }
+  ]
+}
