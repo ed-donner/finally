@@ -7,8 +7,9 @@ allowed-tools:
   - Glob
   - Grep
   - Bash
-  - Task
+  - Agent
   - Write
+requires: [execute-phase]
 ---
 <objective>
 Verify milestone achieved its definition of done. Check requirements coverage, cross-phase integration, and end-to-end flows.
@@ -17,19 +18,13 @@ Verify milestone achieved its definition of done. Check requirements coverage, c
 </objective>
 
 <execution_context>
-@./.claude/get-shit-done/workflows/audit-milestone.md
+@C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/workflows/audit-milestone.md
 </execution_context>
 
 <context>
 Version: $ARGUMENTS (optional — defaults to current milestone)
 
-**Original Intent:**
-@.planning/PROJECT.md
-@.planning/REQUIREMENTS.md
-
-**Planned Work:**
-@.planning/ROADMAP.md
-@.planning/config.json (if exists)
+Core planning files are resolved in-workflow (`init milestone-op`) and loaded only as needed.
 
 **Completed Work:**
 Glob: .planning/phases/*/*-SUMMARY.md
@@ -37,6 +32,6 @@ Glob: .planning/phases/*/*-VERIFICATION.md
 </context>
 
 <process>
-Execute the audit-milestone workflow from @./.claude/get-shit-done/workflows/audit-milestone.md end-to-end.
+Execute end-to-end.
 Preserve all workflow gates (scope determination, verification reading, integration check, requirements coverage, routing).
 </process>

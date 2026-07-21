@@ -6,6 +6,11 @@ After UAT finds gaps, spawn one debug agent per gap. Each agent investigates aut
 Orchestrator stays lean: parse gaps, spawn agents, collect results, update UAT.
 </purpose>
 
+<available_agent_types>
+Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
+- gsd-debugger — Diagnoses and fixes issues
+</available_agent_types>
+
 <paths>
 DEBUG_DIR=.planning/debug
 
@@ -50,6 +55,12 @@ gaps = [
 </step>
 
 <step name="report_plan">
+**Read worktree config:**
+
+```bash
+USE_WORKTREES=$(gsd-sdk query config-get workflow.use_worktrees 2>/dev/null || echo "true")
+```
+
 **Report diagnosis plan to user:**
 
 ```
@@ -73,17 +84,27 @@ This runs in parallel - all gaps investigated simultaneously.
 </step>
 
 <step name="spawn_agents">
+**Load agent skills:**
+
+```bash
+AGENT_SKILLS_DEBUGGER=$(gsd-sdk query agent-skills gsd-debugger)
+EXPECTED_BASE=$(git rev-parse HEAD)
+```
+
 **Spawn debug agents in parallel:**
 
 For each gap, fill the debug-subagent-prompt template and spawn:
 
 ```
-Task(
-  prompt=filled_debug_subagent_prompt,
-  subagent_type="general-purpose",
+Agent(
+  prompt=filled_debug_subagent_prompt + "\n\n<worktree_branch_check>\nFIRST ACTION: assert this is a disposable worktree branch before any repair. Run:\n```bash\nHEAD_REF=$(git symbolic-ref --quiet HEAD || echo \"DETACHED\")\nACTUAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)\nif [ \"$HEAD_REF\" = \"DETACHED\" ] || echo \"$ACTUAL_BRANCH\" | grep -Eq '^(main|master|develop|trunk|release/.*)$'; then\n  echo \"FATAL: diagnose worktree HEAD on '$ACTUAL_BRANCH'; refusing reset --hard on a protected branch.\" >&2\n  exit 1\nfi\nif ! echo \"$ACTUAL_BRANCH\" | grep -Eq '^worktree-agent-[A-Za-z0-9._/-]+$'; then\n  echo \"FATAL: diagnose worktree HEAD '$ACTUAL_BRANCH' is not in the worktree-agent-* namespace; refusing reset --hard.\" >&2\n  exit 1\nfi\nACTUAL_BASE=$(git merge-base HEAD {EXPECTED_BASE})\nif [ \"$ACTUAL_BASE\" != \"{EXPECTED_BASE}\" ]; then\n  git reset --hard {EXPECTED_BASE}\n  [ \"$(git rev-parse HEAD)\" != \"{EXPECTED_BASE}\" ] && { echo \"ERROR: Could not correct worktree base\"; exit 1; }\nfi\n```\nFixes EnterWorktree creating branches from main on all platforms while preventing protected-branch data loss.\n</worktree_branch_check>\n\n<files_to_read>\n- {phase_dir}/{phase_num}-UAT.md\n- .planning/STATE.md\n</files_to_read>\n${AGENT_SKILLS_DEBUGGER}",
+  subagent_type="gsd-debugger",
+  ${USE_WORKTREES !== "false" ? 'isolation="worktree",' : ''}
   description="Debug: {truth_short}"
 )
 ```
+
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above to spawn debug agent(s), stop working on this task immediately. Do not read more files, edit code, or run tests related to these gaps while the subagent(s) are active. Wait for all subagents to return before proceeding. This prevents duplicate work, conflicting edits, and wasted context.
 
 **All agents spawn in single message** (parallel execution).
 
@@ -158,7 +179,7 @@ Update status in frontmatter to "diagnosed".
 
 Commit the updated UAT.md:
 ```bash
-node ./.claude/get-shit-done/bin/gsd-tools.js commit "docs({phase}): add root causes from diagnosis" --files ".planning/phases/XX-name/{phase}-UAT.md"
+gsd-sdk query commit "docs({phase_num}): add root causes from diagnosis" --files ".planning/phases/XX-name/{phase_num}-UAT.md"
 ```
 </step>
 

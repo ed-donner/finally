@@ -1,5 +1,5 @@
 <purpose>
-Create all phases necessary to close gaps identified by `/gsd:audit-milestone`. Reads MILESTONE-AUDIT.md, groups gaps into logical phases, creates phase entries in ROADMAP.md, and offers to plan each phase. One command creates all fix phases — no manual `/gsd:add-phase` per gap.
+Create all phases necessary to close gaps identified by `/gsd:audit-milestone`. Reads MILESTONE-AUDIT.md, groups gaps into logical phases, creates phase entries in ROADMAP.md, and offers to plan each phase. One command creates all fix phases — no manual `/gsd-add-phase` per gap.
 </purpose>
 
 <required_reading>
@@ -12,7 +12,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 
 ```bash
 # Find the most recent audit file
-ls -t .planning/v*-MILESTONE-AUDIT.md 2>/dev/null | head -1
+(ls -t .planning/v*-MILESTONE-AUDIT.md 2>/dev/null || true) | head -1
 ```
 
 Parse YAML frontmatter to extract structured gaps:
@@ -65,8 +65,7 @@ Gap: Flow "View dashboard" broken at data fetch
 Find highest existing phase:
 ```bash
 # Get sorted phase list, extract last one
-PHASES=$(node ./.claude/get-shit-done/bin/gsd-tools.js phases list)
-HIGHEST=$(echo "$PHASES" | jq -r '.directories[-1]')
+HIGHEST=$(gsd-sdk query phases.list --pick directories[-1])
 ```
 
 New phases continue from there:
@@ -123,19 +122,41 @@ Add new phases to current milestone:
 ...
 ```
 
-## 7. Create Phase Directories
+## 7. Update REQUIREMENTS.md Traceability Table (REQUIRED)
+
+For each REQ-ID assigned to a gap closure phase:
+- Update the Phase column to reflect the new gap closure phase
+- Reset Status to `Pending`
+
+Reset checked-off requirements the audit found unsatisfied:
+- Change `[x]` → `[ ]` for any requirement marked unsatisfied in the audit
+- Update coverage count at top of REQUIREMENTS.md
 
 ```bash
-mkdir -p ".planning/phases/{NN}-{name}"
+# Verify traceability table reflects gap closure assignments
+grep -c "Pending" .planning/REQUIREMENTS.md
 ```
 
-## 8. Commit Roadmap Update
+## 8. Create Phase Directories
+
+For each new phase (N, N+1, …), resolve the directory name via `init.phase-op` so the `project_code` prefix is honoured:
 
 ```bash
-node ./.claude/get-shit-done/bin/gsd-tools.js commit "docs(roadmap): add gap closure phases {N}-{M}" --files .planning/ROADMAP.md
+INIT=$(gsd-sdk query init.phase-op "{NN}")
+if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
+expected_phase_dir=$(echo "$INIT" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).expected_phase_dir)")
+mkdir -p "${expected_phase_dir}"
 ```
 
-## 9. Offer Next Steps
+Repeat for each gap-closure phase number. This produces `{CODE}-{NN}-{slug}/` when `project_code` is set in `.planning/config.json`, and `{NN}-{slug}/` otherwise — consistent with all other phase-creation paths.
+
+## 9. Commit Roadmap and Requirements Update
+
+```bash
+gsd-sdk query commit "docs(roadmap): add gap closure phases {N}-{M}" --files .planning/ROADMAP.md .planning/REQUIREMENTS.md
+```
+
+## 10. Offer Next Steps
 
 ```markdown
 ## ✓ Gap Closure Phases Created
@@ -145,13 +166,13 @@ node ./.claude/get-shit-done/bin/gsd-tools.js commit "docs(roadmap): add gap clo
 
 ---
 
-## ▶ Next Up
+## ▶ Next Up — [${PROJECT_CODE}] ${PROJECT_TITLE}
 
 **Plan first gap closure phase**
 
-`/gsd:plan-phase {N}`
+`/clear` then:
 
-<sub>`/clear` first → fresh context window</sub>
+`/gsd:plan-phase {N}`
 
 ---
 
@@ -250,7 +271,10 @@ becomes:
 - [ ] Gaps grouped into logical phases
 - [ ] User confirmed phase plan
 - [ ] ROADMAP.md updated with new phases
+- [ ] REQUIREMENTS.md traceability table updated with gap closure phase assignments
+- [ ] Unsatisfied requirement checkboxes reset (`[x]` → `[ ]`)
+- [ ] Coverage count updated in REQUIREMENTS.md
 - [ ] Phase directories created
-- [ ] Changes committed
+- [ ] Changes committed (includes REQUIREMENTS.md)
 - [ ] User knows to run `/gsd:plan-phase` next
 </success_criteria>

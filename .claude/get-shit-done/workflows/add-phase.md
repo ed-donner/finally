@@ -11,15 +11,15 @@ Read all files referenced by the invoking prompt's execution_context before star
 <step name="parse_arguments">
 Parse the command arguments:
 - All arguments become the phase description
-- Example: `/gsd:add-phase Add authentication` → description = "Add authentication"
-- Example: `/gsd:add-phase Fix critical performance issues` → description = "Fix critical performance issues"
+- Example: `/gsd-add-phase Add authentication` → description = "Add authentication"
+- Example: `/gsd-add-phase Fix critical performance issues` → description = "Fix critical performance issues"
 
 If no arguments provided:
 
 ```
 ERROR: Phase description required
-Usage: /gsd:add-phase <description>
-Example: /gsd:add-phase Add authentication system
+Usage: /gsd-add-phase <description>
+Example: /gsd-add-phase Add authentication system
 ```
 
 Exit.
@@ -29,7 +29,8 @@ Exit.
 Load phase operation context:
 
 ```bash
-INIT=$(node ./.claude/get-shit-done/bin/gsd-tools.js init phase-op "0")
+INIT=$(gsd-sdk query init.phase-op "0")
+if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
 Check `roadmap_exists` from init JSON. If false:
@@ -41,10 +42,10 @@ Exit.
 </step>
 
 <step name="add_phase">
-**Delegate the phase addition to gsd-tools:**
+**Delegate the phase addition to `gsd-sdk query phase.add`:**
 
 ```bash
-RESULT=$(node ./.claude/get-shit-done/bin/gsd-tools.js phase add "${description}")
+RESULT=$(gsd-sdk query phase.add "${description}")
 ```
 
 The CLI handles:
@@ -82,18 +83,18 @@ Roadmap updated: .planning/ROADMAP.md
 
 ---
 
-## ▶ Next Up
+## ▶ Next Up — [${PROJECT_CODE}] ${PROJECT_TITLE}
 
 **Phase {N}: {description}**
 
-`/gsd:plan-phase {N}`
+`/clear` then:
 
-<sub>`/clear` first → fresh context window</sub>
+`/gsd:plan-phase {N}`
 
 ---
 
 **Also available:**
-- `/gsd:add-phase <description>` — add another phase
+- `/gsd-add-phase <description>` — add another phase
 - Review roadmap
 
 ---
@@ -103,7 +104,7 @@ Roadmap updated: .planning/ROADMAP.md
 </process>
 
 <success_criteria>
-- [ ] `gsd-tools phase add` executed successfully
+- [ ] `gsd-sdk query phase.add` executed successfully
 - [ ] Phase directory created
 - [ ] Roadmap updated with new phase entry
 - [ ] STATE.md updated with roadmap evolution note

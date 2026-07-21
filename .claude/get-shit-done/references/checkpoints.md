@@ -8,6 +8,7 @@ Plans execute autonomously. Checkpoints formalize interaction points where human
 2. **Claude sets up the verification environment** - Start dev servers, seed databases, configure env vars
 3. **User only does what requires human judgment** - Visual checks, UX evaluation, "does this feel right?"
 4. **Secrets come from user, automation comes from Claude** - Ask for API keys, then Claude uses them via CLI
+5. **Auto-mode bypasses verification/decision checkpoints** — When `workflow._auto_chain_active` or `workflow.auto_advance` is true in config: human-verify auto-approves, decision auto-selects first option, human-action still stops (auth gates cannot be automated)
 </overview>
 
 <checkpoint_types>
@@ -16,6 +17,12 @@ Plans execute autonomously. Checkpoints formalize interaction points where human
 ## checkpoint:human-verify (Most Common - 90%)
 
 **When:** Claude completed automated work, human confirms it works correctly.
+
+> **Default mode (#3309): `workflow.human_verify_mode = end-of-phase`.** New projects do NOT halt mid-flight at `checkpoint:human-verify`. The planner suppresses those task emissions and embeds the verification details into the relevant `auto` task's `<verify><human-check>` block; the verifier harvests every `<verify><human-check>` at end-of-phase (Step 8) and consolidates them into the existing `human_needed` → HUMAN-UAT.md flow in `workflows/execute-phase.md`. The user reviews everything in one batch.
+>
+> **Why this is the default:** every mid-flight halt costs a full executor cold-start (CLAUDE.md, MEMORY.md, STATE.md, plan re-read on respawn) because subagent context is discarded across the pause. A plan with N human-verify checkpoints pays the cold-start cost N+1 times — measured at "tens of thousands of tokens" per round-trip on real projects.
+>
+> Set `workflow.human_verify_mode = mid-flight` in `.planning/config.json` to opt back into the pre-#3309 behavior of halting at every checkpoint. `checkpoint:decision` and `checkpoint:human-action` are unaffected by either value — those gate the work itself, not post-hoc verification.
 
 **Use for:**
 - Visual UI checks (layout, styling, responsiveness)
@@ -49,7 +56,7 @@ Plans execute autonomously. Checkpoints formalize interaction points where human
 <task type="auto">
   <name>Start dev server for verification</name>
   <action>Run `npm run dev` in background, wait for "ready" message, capture port</action>
-  <verify>curl http://localhost:3000 returns 200</verify>
+  <verify>fetch http://localhost:3000 returns 200</verify>
   <done>Dev server running at http://localhost:3000</done>
 </task>
 
@@ -239,7 +246,7 @@ Plans execute autonomously. Checkpoints formalize interaction points where human
   <name>Deploy to Vercel</name>
   <files>.vercel/, vercel.json</files>
   <action>Run `vercel --yes` to deploy</action>
-  <verify>vercel ls shows deployment, curl returns 200</verify>
+  <verify>vercel ls shows deployment, fetch returns 200</verify>
 </task>
 
 <!-- If vercel returns "Error: Not authenticated", Claude creates checkpoint on the fly -->
@@ -260,7 +267,7 @@ Plans execute autonomously. Checkpoints formalize interaction points where human
 <task type="auto">
   <name>Retry Vercel deployment</name>
   <action>Run `vercel --yes` (now authenticated)</action>
-  <verify>vercel ls shows deployment, curl returns 200</verify>
+  <verify>vercel ls shows deployment, fetch returns 200</verify>
 </task>
 ```
 
@@ -454,8 +461,8 @@ I'll verify: vercel whoami returns your account
 npm run dev &
 DEV_SERVER_PID=$!
 
-# Wait for ready (max 30s)
-timeout 30 bash -c 'until curl -s localhost:3000 > /dev/null 2>&1; do sleep 1; done'
+# Wait for ready (max 30s) — uses fetch() for cross-platform compatibility
+timeout 30 bash -c 'until node -e "fetch(\"http://localhost:3000\").then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))" 2>/dev/null; do sleep 1; done'
 ```
 
 **Port conflicts:** Kill stale process (`lsof -ti:3000 | xargs kill`) or use alternate port (`--port 3001`).
@@ -488,7 +495,9 @@ timeout 30 bash -c 'until curl -s localhost:3000 > /dev/null 2>&1; do sleep 1; d
 | Auth error | Create auth gate checkpoint |
 | Network timeout | Retry with backoff, then checkpoint if persistent |
 
-**Never present a checkpoint with broken verification environment.** If `curl localhost:3000` fails, don't ask user to "visit localhost:3000".
+**Never present a checkpoint with broken verification environment.** If the local server isn't responding, don't ask user to "visit localhost:3000".
+
+> **Cross-platform note:** Use `node -e "fetch('http://localhost:3000').then(r=>console.log(r.status))"` instead of `curl` for health checks. `curl` is broken on Windows MSYS/Git Bash due to SSL/path mangling issues.
 
 ```xml
 <!-- WRONG: Checkpoint with broken environment -->
@@ -501,7 +510,7 @@ timeout 30 bash -c 'until curl -s localhost:3000 > /dev/null 2>&1; do sleep 1; d
 <task type="auto">
   <name>Fix server startup issue</name>
   <action>Investigate error, fix root cause, restart server</action>
-  <verify>curl http://localhost:3000 returns 200</verify>
+  <verify>fetch http://localhost:3000 returns 200</verify>
 </task>
 
 <task type="checkpoint:human-verify">
@@ -607,7 +616,7 @@ timeout 30 bash -c 'until curl -s localhost:3000 > /dev/null 2>&1; do sleep 1; d
 <task type="auto">
   <name>Start dev server for auth testing</name>
   <action>Run `npm run dev` in background, wait for ready signal</action>
-  <verify>curl http://localhost:3000 returns 200</verify>
+  <verify>fetch http://localhost:3000 returns 200</verify>
   <done>Dev server running at http://localhost:3000</done>
 </task>
 
@@ -650,7 +659,7 @@ timeout 30 bash -c 'until curl -s localhost:3000 > /dev/null 2>&1; do sleep 1; d
 <task type="auto">
   <name>Start dev server</name>
   <action>Run `npm run dev` in background</action>
-  <verify>curl localhost:3000 returns 200</verify>
+  <verify>fetch http://localhost:3000 returns 200</verify>
 </task>
 
 <task type="checkpoint:human-verify" gate="blocking">
@@ -676,7 +685,7 @@ timeout 30 bash -c 'until curl -s localhost:3000 > /dev/null 2>&1; do sleep 1; d
 <task type="auto">
   <name>Deploy to Vercel</name>
   <action>Run `vercel --yes`. Capture URL.</action>
-  <verify>vercel ls shows deployment, curl returns 200</verify>
+  <verify>vercel ls shows deployment, fetch returns 200</verify>
 </task>
 
 <task type="checkpoint:human-verify">
@@ -755,6 +764,36 @@ timeout 30 bash -c 'until curl -s localhost:3000 > /dev/null 2>&1; do sleep 1; d
 **Why bad:** Stripe has an API. Claude should create the webhook via API and write to .env directly.
 
 </anti_patterns>
+
+<type name="tdd-review">
+## checkpoint:tdd-review (TDD Mode Only)
+
+**When:** All waves in a phase complete and `workflow.tdd_mode` is enabled. Inserted by the execute-phase orchestrator after `aggregate_results`.
+
+**Purpose:** Collaborative review of TDD gate compliance across all `type: tdd` plans in the phase. Advisory — does not block execution.
+
+**Use for:**
+- Verifying RED/GREEN/REFACTOR commit sequence for each TDD plan
+- Surfacing gate violations (missing RED or GREEN commits)
+- Reviewing test quality (tests fail for the right reason)
+- Confirming minimal GREEN implementations
+
+**Structure:**
+```xml
+<task type="checkpoint:tdd-review" gate="advisory">
+  <what-checked>TDD gate compliance for {count} plans in Phase {X}</what-checked>
+  <gate-results>
+    | Plan | RED | GREEN | REFACTOR | Status |
+    |------|-----|-------|----------|--------|
+    | {id} |  ✓  |   ✓   |    ✓     | Pass   |
+  </gate-results>
+  <violations>[List of gate violations, or "None"]</violations>
+  <resume-signal>Review complete — proceed to phase verification</resume-signal>
+</task>
+```
+
+**Auto-mode behavior:** When `workflow._auto_chain_active` or `workflow.auto_advance` is true, the TDD review checkpoint auto-approves (advisory gate — never blocks).
+</type>
 
 <summary>
 

@@ -61,7 +61,11 @@ export function ChartPanel() {
 
   // Sync data when selectedTicker or priceHistory changes
   useEffect(() => {
-    if (!seriesRef.current || !selectedTicker) return;
+    if (!seriesRef.current) return;
+    if (!selectedTicker) {
+      seriesRef.current.setData([]);
+      return;
+    }
     const history = priceHistory[selectedTicker];
     if (!history || history.length === 0) return;
 
@@ -71,27 +75,26 @@ export function ChartPanel() {
     chartRef.current?.timeScale().fitContent();
   }, [selectedTicker, priceHistory]);
 
-  if (!selectedTicker) {
-    return (
-      <div className="h-full w-full p-3 bg-terminal-surface flex items-center justify-center">
-        <span className="text-text-muted font-mono text-xs uppercase tracking-wider">
-          Select a ticker to view chart
-        </span>
-      </div>
-    );
-  }
-
   return (
-    <div className="h-full w-full flex flex-col bg-terminal-surface">
+    <div className="h-full w-full flex flex-col bg-terminal-surface relative">
       <div className="px-3 pt-3 pb-1 flex items-center justify-between">
         <span className="text-text-muted font-mono text-xs uppercase tracking-wider">
           Chart
         </span>
-        <span className="font-mono text-sm font-bold text-text-primary">
-          {selectedTicker}
-        </span>
+        {selectedTicker && (
+          <span className="font-mono text-sm font-bold text-text-primary">
+            {selectedTicker}
+          </span>
+        )}
       </div>
       <div ref={containerRef} className="flex-1 min-h-0" />
+      {!selectedTicker && (
+        <div className="absolute inset-0 flex items-center justify-center bg-terminal-surface pointer-events-none">
+          <span className="text-text-muted font-mono text-xs uppercase tracking-wider">
+            Select a ticker to view chart
+          </span>
+        </div>
+      )}
     </div>
   );
 }
