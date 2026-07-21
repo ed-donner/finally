@@ -1,14 +1,35 @@
 {
   "mode": "interactive",
-  "depth": "standard",
+  "granularity": "standard",
   "workflow": {
     "research": true,
     "plan_check": true,
-    "verifier": true
+    "verifier": true,
+    "auto_advance": false,
+    "nyquist_validation": true,
+    "security_enforcement": true,
+    "security_asvs_level": 1,
+    "security_block_on": "high",
+    "discuss_mode": "discuss",
+    "research_before_questions": false,
+    "code_review_command": null,
+    "plan_bounce": false,
+    "plan_bounce_script": null,
+    "plan_bounce_passes": 2,
+    "cross_ai_execution": false,
+    "cross_ai_command": "",
+    "cross_ai_timeout": 300
+  },
+  "ship": {
+    "pr_body_sections": []
   },
   "planning": {
     "commit_docs": true,
-    "search_gitignored": false
+    "search_gitignored": false,
+    "sub_repos": []
+  },
+  "git": {
+    "create_tag": true
   },
   "parallelization": {
     "enabled": true,
@@ -31,5 +52,11 @@
   "safety": {
     "always_confirm_destructive": true,
     "always_confirm_external_services": true
-  }
+  },
+  "hooks": {
+    "context_warnings": true
+  },
+  "project_code": null,
+  "agent_skills": {},
+  "claude_md_path": "./CLAUDE.md"
 }

@@ -14,7 +14,7 @@ From `$ARGUMENTS`:
 The `find-phase` command handles normalization and validation in one step:
 
 ```bash
-PHASE_INFO=$(node ./.claude/get-shit-done/bin/gsd-tools.js find-phase "${PHASE}")
+PHASE_INFO=$(gsd-sdk query find-phase "${PHASE}")
 ```
 
 Returns JSON with:
@@ -45,8 +45,8 @@ fi
 Use `roadmap get-phase` to validate phase exists:
 
 ```bash
-PHASE_CHECK=$(node ./.claude/get-shit-done/bin/gsd-tools.js roadmap get-phase "${PHASE}")
-if [ "$(echo "$PHASE_CHECK" | jq -r '.found')" = "false" ]; then
+PHASE_CHECK=$(gsd-sdk query roadmap.get-phase "${PHASE}" --pick found)
+if [ "$PHASE_CHECK" = "false" ]; then
   echo "ERROR: Phase ${PHASE} not found in roadmap"
   exit 1
 fi
@@ -57,5 +57,5 @@ fi
 Use `find-phase` for directory lookup:
 
 ```bash
-PHASE_DIR=$(node ./.claude/get-shit-done/bin/gsd-tools.js find-phase "${PHASE}" --raw)
+PHASE_DIR=$(gsd-sdk query find-phase "${PHASE}" --raw)
 ```

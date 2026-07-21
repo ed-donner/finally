@@ -20,6 +20,7 @@ wave: N                     # Execution wave (1, 2, 3...). Pre-computed at plan 
 depends_on: []              # Plan IDs this plan requires (e.g., ["01-01"]).
 files_modified: []          # Files this plan modifies.
 autonomous: true            # false if plan has checkpoints requiring user interaction
+requirements: []            # REQUIRED — Requirement IDs from ROADMAP this plan addresses. MUST NOT be empty.
 user_setup: []              # Human-required setup Claude cannot automate (see below)
 
 # Goal-backward verification (derived during planning, verified after execution)
@@ -37,10 +38,10 @@ Output: [What artifacts will be created]
 </objective>
 
 <execution_context>
-@./.claude/get-shit-done/workflows/execute-plan.md
-@./.claude/get-shit-done/templates/summary.md
+@C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/workflows/execute-plan.md
+@C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/templates/summary.md
 [If plan contains checkpoint tasks (type="checkpoint:*"), add:]
-@./.claude/get-shit-done/references/checkpoints.md
+@C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/references/checkpoints.md
 </execution_context>
 
 <context>
@@ -62,21 +63,29 @@ Output: [What artifacts will be created]
 <task type="auto">
   <name>Task 1: [Action-oriented name]</name>
   <files>path/to/file.ext, another/file.ext</files>
-  <action>[Specific implementation - what to do, how to do it, what to avoid and WHY]</action>
+  <read_first>path/to/reference.ext, path/to/source-of-truth.ext</read_first>
+  <action>[Specific implementation - what to do, how to do it, what to avoid and WHY. Include CONCRETE values: exact identifiers, parameters, expected outputs, file paths, command arguments. Never say "align X with Y" without specifying the exact target state.]</action>
   <verify>[Command or check to prove it worked]</verify>
+  <acceptance_criteria>
+    - [Grep-verifiable condition: "file.ext contains 'exact string'"]
+    - [Measurable condition: "output.ext uses 'expected-value', NOT 'wrong-value'"]
+  </acceptance_criteria>
   <done>[Measurable acceptance criteria]</done>
 </task>
 
 <task type="auto">
   <name>Task 2: [Action-oriented name]</name>
   <files>path/to/file.ext</files>
-  <action>[Specific implementation]</action>
+  <read_first>path/to/reference.ext</read_first>
+  <action>[Specific implementation with concrete values]</action>
   <verify>[Command or check]</verify>
+  <acceptance_criteria>
+    - [Grep-verifiable condition]
+  </acceptance_criteria>
   <done>[Acceptance criteria]</done>
 </task>
 
-<!-- For checkpoint task examples and patterns, see @./.claude/get-shit-done/references/checkpoints.md -->
-<!-- Key rule: Claude starts dev server BEFORE human-verify checkpoints. User only visits URLs. -->
+<!-- For checkpoint task examples and patterns, see @C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/references/checkpoints.md -->
 
 <task type="checkpoint:decision" gate="blocking">
   <decision>[What needs deciding]</decision>
@@ -129,6 +138,7 @@ After completion, create `.planning/phases/XX-name/{phase}-{plan}-SUMMARY.md`
 | `depends_on` | Yes | Array of plan IDs this plan requires. |
 | `files_modified` | Yes | Files this plan touches. |
 | `autonomous` | Yes | `true` if no checkpoints, `false` if has checkpoints |
+| `requirements` | Yes | **MUST** list requirement IDs from ROADMAP. Every roadmap requirement MUST appear in at least one plan. |
 | `user_setup` | No | Array of human-required setup items (external services) |
 | `must_haves` | Yes | Goal-backward verification criteria (see below) |
 
@@ -268,7 +278,7 @@ TDD features get dedicated plans with `type: tdd`.
 → Yes: Create a TDD plan
 → No: Standard task in standard plan
 
-See `./.claude/get-shit-done/references/tdd.md` for TDD plan structure.
+See `C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/references/tdd.md` for TDD plan structure.
 
 ---
 
@@ -331,7 +341,7 @@ Output: User model, API endpoints, and UI components.
   <name>Task 2: Create User API endpoints</name>
   <files>src/features/user/api.ts</files>
   <action>GET /users (list), GET /users/:id (single), POST /users (create). Use User type from model.</action>
-  <verify>curl tests pass for all endpoints</verify>
+  <verify>fetch tests pass for all endpoints</verify>
   <done>All CRUD operations work</done>
 </task>
 </tasks>
@@ -372,9 +382,9 @@ Output: Working dashboard component.
 </objective>
 
 <execution_context>
-@./.claude/get-shit-done/workflows/execute-plan.md
-@./.claude/get-shit-done/templates/summary.md
-@./.claude/get-shit-done/references/checkpoints.md
+@C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/workflows/execute-plan.md
+@C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/templates/summary.md
+@C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/references/checkpoints.md
 </execution_context>
 
 <context>
@@ -397,7 +407,7 @@ Output: Working dashboard component.
 <task type="auto">
   <name>Start dev server</name>
   <action>Run `npm run dev` in background, wait for ready</action>
-  <verify>curl localhost:3000 returns 200</verify>
+  <verify>fetch http://localhost:3000 returns 200</verify>
 </task>
 
 <task type="checkpoint:human-verify" gate="blocking">
@@ -454,6 +464,39 @@ files_modified: [...]
 </task>
 ```
 
+**Bad: Missing read_first (executor modifies files it hasn't read)**
+```xml
+<task type="auto">
+  <name>Update database config</name>
+  <files>src/config/database.ts</files>
+  <!-- No read_first! Executor doesn't know current state or conventions -->
+  <action>Update the database config to match production settings</action>
+</task>
+```
+
+**Bad: Vague acceptance criteria (not verifiable)**
+```xml
+<acceptance_criteria>
+  - Config is properly set up
+  - Database connection works correctly
+</acceptance_criteria>
+```
+
+**Good: Concrete with read_first + verifiable criteria**
+```xml
+<task type="auto">
+  <name>Update database config for connection pooling</name>
+  <files>src/config/database.ts</files>
+  <read_first>src/config/database.ts, .env.example, docker-compose.yml</read_first>
+  <action>Add pool configuration: min=2, max=20, idleTimeoutMs=30000. Add SSL config: rejectUnauthorized=true when NODE_ENV=production. Add .env.example entry: DATABASE_POOL_MAX=20.</action>
+  <acceptance_criteria>
+    - database.ts contains "max: 20" and "idleTimeoutMillis: 30000"
+    - database.ts contains SSL conditional on NODE_ENV
+    - .env.example contains DATABASE_POOL_MAX
+  </acceptance_criteria>
+</task>
+```
+
 ---
 
 ## Guidelines
@@ -497,7 +540,7 @@ user_setup:
 
 **Result:** Execute-plan generates `{phase}-USER-SETUP.md` with checklist for the user.
 
-See `./.claude/get-shit-done/templates/user-setup.md` for full schema and examples
+See `C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/templates/user-setup.md` for full schema and examples
 
 ---
 
@@ -564,4 +607,4 @@ Task completion ≠ Goal achievement. A task "create chat component" can complet
 5. Gaps found → fix plans created → execute → re-verify
 6. All must_haves pass → phase complete
 
-See `./.claude/get-shit-done/workflows/verify-phase.md` for verification logic.
+See `C:/Users/J.Taljaard/Projects/finally/.claude/get-shit-done/workflows/verify-phase.md` for verification logic.
