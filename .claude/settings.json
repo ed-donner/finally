@@ -3,5 +3,17 @@
     "frontend-design@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
     "playwright@claude-plugins-official": true
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -z \"$FINALLY_STOP_HOOK_ACTIVE\" ]; then FINALLY_STOP_HOOK_ACTIVE=1 claude -p 'Use the change-reviewer agent to review all changes since the last commit and write the result to planning/review.md'; fi"
+          }
+        ]
+      }
+    ]
   }
 }
