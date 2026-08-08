@@ -454,3 +454,30 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Doc Review Notes (2026-08-08)
+
+### Questions & Clarifications
+
+- **Chat history reload (§8, §7)**: `chat_messages` is persisted, but there's no `GET /api/chat` (or similar) endpoint listed. On page refresh, does the frontend re-fetch prior conversation, or does chat reset each session? If it should persist visually, an endpoint is needed.
+- **SSE payload shape (§6)**: "Each SSE event contains ticker, price, previous price, timestamp, and change direction" reads as one ticker per event. With 10 tickers pushing independently every ~500ms that's fine, but worth stating explicitly — one `event` per ticker, or one event batching all watched tickers? This also affects how the frontend keys reconnection/backfill logic.
+- **SSE cadence vs. Massive polling (§6)**: the simulator ticks every ~500ms, but Massive free tier only polls every 15s. Does the SSE stream still emit every ~500ms in Massive mode (repeating the same unchanged price), or does it only emit on an actual price change? Worth stating explicitly so the frontend's "flash on change" logic isn't triggered by no-op updates.
+- **Unknown/new tickers (§7, §8)**: seed data covers 10 known tickers with realistic starting prices. If a user (or the LLM via `watchlist_changes`) adds a ticker outside that seed set, how does the simulator pick a starting price? Is there any validation that a ticker symbol is real/tradable before it's added?
+- **Watchlist size limit**: no cap is mentioned. Given SSE cadence, Massive API rate limits, and per-ticker sparkline rendering cost, should there be a max watchlist size?
+- **Multi-trade partial failure (§9)**: if the LLM's `trades` array contains multiple trades and one fails validation (e.g., trade 2 of 3 has insufficient cash), do the others still execute? The doc says failures are reported back in the chat response, but doesn't say whether execution is all-or-nothing or best-effort per trade.
+- **Trade endpoint response shape (§8)**: `POST /api/portfolio/trade` request body is specified but not the response — presumably updated position/cash, plus the error shape for insufficient funds/shares (400? 422?). Worth pinning down since both the manual trade bar and the LLM's auto-execution path depend on it.
+- **LLM call failures**: no mention of timeout/retry behavior if OpenRouter/Cerebras errors or times out mid-chat. Does `/api/chat` surface a graceful error to the frontend, or retry once?
+- **`/api/health` contents (§8)**: does it just return 200, or also check DB connectivity and that the market-data background task is alive? Useful for Docker healthchecks.
+- **Sparkline persistence (§2, §10)**: sparklines are explicitly frontend-accumulated from SSE since page load, and there's no price-history table. Confirming this is intentional — a refresh resets all sparklines to empty. If that's acceptable for the demo, worth stating outright as a known/accepted limitation rather than leaving it implicit.
+
+### Possible Inaccuracy
+
+- **§10 Technical Notes**: "Canvas-based charting library preferred (Lightweight Charts or Recharts)" — Recharts renders via SVG, not canvas. Either drop Recharts from that parenthetical or adjust the wording (e.g., "Lightweight Charts, or SVG-based alternatives like Recharts").
+
+### Simplification Opportunities
+
+- **Docker wrapper duplication (§11)**: both a root `docker-compose.yml` ("optional convenience wrapper") and dedicated `start_mac.sh`/`start_windows.ps1` scripts exist, each presumably encoding the same port/volume/env-file config. Consider having the scripts simply shell out to `docker compose up`/`down` so the port/volume mapping lives in one place instead of two.
+- **`actions` JSON blob (§7, §9)**: the `chat_messages.actions` column stores a JSON blob of executed trades/watchlist changes. Since this is structurally the same shape as the LLM's structured-output `trades`/`watchlist_changes` fields (§9), it may be simplest to persist the LLM response object verbatim rather than defining a separately-shaped `actions` payload — one schema, one source of truth.
+- **Color scheme (§2)**: only the purple accent has a stated usage ("submit buttons"). A one-line mapping for yellow/blue (e.g., yellow = alerts/highlights, blue = links/secondary actions) would save the Frontend Engineer agent from having to invent conventions ad hoc.
