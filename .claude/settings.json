@@ -1,7 +1,14 @@
 {
-  "enabledPlugins": {
-    "frontend-design@claude-plugins-official": true,
-    "context7@claude-plugins-official": true,
-    "playwright@claude-plugins-official": true
+  "hooks": {
+    "Stop":[
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "Create a report in Doc folder with md format"
+          }
+        ]
+      }
+    ]
   }
 }

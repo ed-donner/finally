@@ -22,7 +22,7 @@ The user runs a single Docker command (or a provided start script). A browser op
 ### What the User Can Do
 
 - **Watch prices stream** — prices flash green (uptick) or red (downtick) with subtle CSS animations that fade
-- **View sparkline mini-charts** — price action beside each ticker in the watchlist, accumulated on the frontend from the SSE stream since page load (sparklines fill in progressively)
+- **View sparkline mini-charts** — price action beside each ticker in the watchlist, accumulated on the frontend from the SSE stream since page load (sparklines fill in progressively). No price-history table backs this — a page refresh intentionally resets sparklines to empty; this is an accepted simplification, not a gap.
 - **Click a ticker** to see a larger detailed chart in the main chart area
 - **Buy and sell shares** — market orders only, instant fill at current price, no fees, no confirmation dialog
 - **Monitor their portfolio** — a heatmap (treemap) showing positions sized by weight and colored by P&L, plus a P&L chart tracking total portfolio value over time
@@ -39,9 +39,9 @@ The user runs a single Docker command (or a provided start script). A browser op
 - **Responsive but desktop-first**: optimized for wide screens, functional on tablet
 
 ### Color Scheme
-- Accent Yellow: `#ecad0a`
-- Blue Primary: `#209dd7`
-- Purple Secondary: `#753991` (submit buttons)
+- Accent Yellow: `#ecad0a` — alerts, highlights, price-flash-adjacent emphasis (not the flash itself, which is green/red)
+- Blue Primary: `#209dd7` — links, secondary actions, selected/active states (e.g. selected ticker)
+- Purple Secondary: `#753991` — submit buttons (buy/sell confirm, send chat message)
 
 ## 3. Architecture Overview
 
@@ -171,12 +171,22 @@ Both the simulator and the Massive client implement the same abstract interface.
 - SSE streams read from this cache and push updates to connected clients
 - This architecture supports future multi-user scenarios without changes to the data layer
 
+### Adding New Tickers
+
+- **Simulator mode**: any ticker can be added. If it isn't in the seed price list, the simulator assigns it a deterministic pseudo-random starting price (derived from a hash of the ticker symbol, in the $10–$500 range) and default drift/volatility parameters, then simulates it like any other ticker.
+- **Massive mode**: the ticker is validated against the Massive API on add (a single lookup/quote call). If the symbol doesn't resolve, `POST /api/watchlist` returns a 400 error and nothing is added.
+- This applies equally whether the ticker is added manually or via the LLM's `watchlist_changes`.
+
+### Watchlist Size Limit
+
+- The watchlist is capped at **20 tickers**. `POST /api/watchlist` returns a 400 error if adding would exceed the cap (bounds SSE fan-out, Massive API call volume, and sparkline rendering cost). The LLM is told about this limit so it can explain a rejected `watchlist_changes` entry to the user.
+
 ### SSE Streaming
 
 - Endpoint: `GET /api/stream/prices`
 - Long-lived SSE connection; client uses native `EventSource` API
-- Server pushes price updates for all tickers known to the system at a regular cadence (~500ms) — in the single-user model this is equivalent to the user's watchlist
-- Each SSE event contains ticker, price, previous price, timestamp, and change direction
+- One SSE `event` per ticker per update — not a batched array. Each event contains ticker, price, previous price, timestamp, and change direction
+- The background task ticks at a fixed interval (~500ms), but an event is only emitted for a ticker when its price actually changed since the last emission. In simulator mode this is effectively every tick; in Massive mode (polling every 2–15s depending on tier) this means no events fire between polls, rather than repeating a stale price. This keeps the frontend's flash-on-change logic from firing on no-op updates.
 - Client handles reconnection automatically (EventSource has built-in retry)
 
 ---
@@ -236,7 +246,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 - `user_id` TEXT (default: `"default"`)
 - `role` TEXT (`"user"` or `"assistant"`)
 - `content` TEXT
-- `actions` TEXT (JSON — trades executed, watchlist changes made; null for user messages)
+- `actions` TEXT (JSON; null for user messages. For assistant messages, this is the LLM's `trades` and `watchlist_changes` arrays from the structured output response — see §9 — with an added `status` field per entry (`"executed"` or `"failed: <reason>"`). No separate schema; it's the same shape the LLM produced, annotated with outcomes.)
 - `created_at` TEXT (ISO timestamp)
 
 ### Default Seed Data
@@ -257,25 +267,26 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/portfolio` | Current positions, cash balance, total value, unrealized P&L |
-| POST | `/api/portfolio/trade` | Execute a trade: `{ticker, quantity, side}` |
+| POST | `/api/portfolio/trade` | Execute a trade: `{ticker, quantity, side}`. Returns `{success, position, cash_balance}` on success, or `400` with `{success: false, error}` on failure (insufficient cash/shares, unknown ticker) |
 | GET | `/api/portfolio/history` | Portfolio value snapshots over time (for P&L chart) |
 
 ### Watchlist
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/watchlist` | Current watchlist tickers with latest prices |
-| POST | `/api/watchlist` | Add a ticker: `{ticker}` |
+| POST | `/api/watchlist` | Add a ticker: `{ticker}`. `400` if the ticker doesn't resolve (Massive mode) or the 20-ticker cap is exceeded |
 | DELETE | `/api/watchlist/{ticker}` | Remove a ticker |
 
 ### Chat
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/chat` | Recent conversation history (for restoring chat on page load) |
 | POST | `/api/chat` | Send a message, receive complete JSON response (message + executed actions) |
 
 ### System
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/health` | Health check (for Docker/deployment) |
+| GET | `/api/health` | Health check: `200` if the process is up, DB is reachable, and the market-data background task has ticked within the last few seconds; `503` otherwise |
 
 ---
 
@@ -292,11 +303,11 @@ When the user sends a chat message, the backend:
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
 2. Loads recent conversation history from the `chat_messages` table
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
-4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
+4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill. If the call errors or times out, one retry is attempted; if that also fails, the backend responds with a canned assistant message ("Sorry, I'm having trouble reaching the AI service — please try again.") and executes no actions. This canned response is not sent to the LLM or stored as if the LLM produced it — it's a backend fallback message.
 5. Parses the complete structured JSON response
-6. Auto-executes any trades or watchlist changes specified in the response
-7. Stores the message and executed actions in `chat_messages`
-8. Returns the complete JSON response to the frontend (no token-by-token streaming — Cerebras inference is fast enough that a loading indicator is sufficient)
+6. Auto-executes any trades or watchlist changes specified in the response, **sequentially and independently**: each entry in `trades`/`watchlist_changes` is validated and applied on its own, so one failure (e.g. insufficient cash on trade 2 of 3) doesn't block the others. Every entry's outcome (`executed` or `failed: <reason>`) is tracked.
+7. Stores the message and executed actions (with per-entry outcomes, see §7 `chat_messages.actions`) in `chat_messages`
+8. Returns the complete JSON response to the frontend, annotated with per-entry outcomes (no token-by-token streaming — Cerebras inference is fast enough that a loading indicator is sufficient)
 
 ### Structured Output Schema
 
@@ -325,7 +336,7 @@ Trades specified by the LLM execute automatically — no confirmation dialog. Th
 - It creates an impressive, fluid demo experience
 - It demonstrates agentic AI capabilities — the core theme of the course
 
-If a trade fails validation (e.g., insufficient cash), the error is included in the chat response so the LLM can inform the user.
+If a trade fails validation (e.g., insufficient cash), the error is included in the chat response so the LLM can inform the user — other trades/watchlist changes in the same response still execute (see step 6 above).
 
 ### System Prompt Guidance
 
@@ -364,10 +375,11 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 ### Technical Notes
 
 - Use `EventSource` for SSE connection to `/api/stream/prices`
-- Canvas-based charting library preferred (Lightweight Charts or Recharts) for performance
+- Charting library preferred for performance: Lightweight Charts (canvas-based) for the main price chart; Recharts (SVG-based) is an acceptable alternative for lower-frequency charts (P&L line, heatmap) where canvas performance isn't critical
 - Price flash effect: on receiving a new price, briefly apply a CSS class with background color transition, then remove it
 - All API calls go to the same origin (`/api/*`) — no CORS configuration needed
 - Tailwind CSS for styling with a custom dark theme
+- On mount, the chat panel calls `GET /api/chat` to restore prior conversation history before the user sends a new message
 
 ---
 
@@ -403,17 +415,18 @@ The `db/` directory in the project root maps to `/app/db` in the container. The 
 
 ### Start/Stop Scripts
 
+Port mapping, volume mount, and env-file wiring are defined once, in `docker-compose.yml` — the start/stop scripts are thin wrappers around `docker compose`, not a second place that duplicates that configuration.
+
 **`scripts/start_mac.sh`** (macOS/Linux):
-- Builds the Docker image if not already built (or if `--build` flag passed)
-- Runs the container with the volume mount, port mapping, and `.env` file
+- Runs `docker compose up -d --build` (Compose only rebuilds the image if the Dockerfile or build context changed)
 - Prints the URL to access the app
 - Optionally opens the browser
 
 **`scripts/stop_mac.sh`** (macOS/Linux):
-- Stops and removes the running container
+- Runs `docker compose down`
 - Does NOT remove the volume (data persists)
 
-**`scripts/start_windows.ps1`** / **`scripts/stop_windows.ps1`**: PowerShell equivalents for Windows.
+**`scripts/start_windows.ps1`** / **`scripts/stop_windows.ps1`**: PowerShell equivalents for Windows, wrapping the same `docker compose` commands.
 
 All scripts should be idempotent — safe to run multiple times.
 
@@ -453,31 +466,5 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Sell shares: cash increases, position updates or disappears
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
+- Chat history persists: send a message, refresh the page, prior conversation still shows
 - SSE resilience: disconnect and verify reconnection
-
----
-
-## 13. Doc Review Notes (2026-08-08)
-
-### Questions & Clarifications
-
-- **Chat history reload (§8, §7)**: `chat_messages` is persisted, but there's no `GET /api/chat` (or similar) endpoint listed. On page refresh, does the frontend re-fetch prior conversation, or does chat reset each session? If it should persist visually, an endpoint is needed.
-- **SSE payload shape (§6)**: "Each SSE event contains ticker, price, previous price, timestamp, and change direction" reads as one ticker per event. With 10 tickers pushing independently every ~500ms that's fine, but worth stating explicitly — one `event` per ticker, or one event batching all watched tickers? This also affects how the frontend keys reconnection/backfill logic.
-- **SSE cadence vs. Massive polling (§6)**: the simulator ticks every ~500ms, but Massive free tier only polls every 15s. Does the SSE stream still emit every ~500ms in Massive mode (repeating the same unchanged price), or does it only emit on an actual price change? Worth stating explicitly so the frontend's "flash on change" logic isn't triggered by no-op updates.
-- **Unknown/new tickers (§7, §8)**: seed data covers 10 known tickers with realistic starting prices. If a user (or the LLM via `watchlist_changes`) adds a ticker outside that seed set, how does the simulator pick a starting price? Is there any validation that a ticker symbol is real/tradable before it's added?
-- **Watchlist size limit**: no cap is mentioned. Given SSE cadence, Massive API rate limits, and per-ticker sparkline rendering cost, should there be a max watchlist size?
-- **Multi-trade partial failure (§9)**: if the LLM's `trades` array contains multiple trades and one fails validation (e.g., trade 2 of 3 has insufficient cash), do the others still execute? The doc says failures are reported back in the chat response, but doesn't say whether execution is all-or-nothing or best-effort per trade.
-- **Trade endpoint response shape (§8)**: `POST /api/portfolio/trade` request body is specified but not the response — presumably updated position/cash, plus the error shape for insufficient funds/shares (400? 422?). Worth pinning down since both the manual trade bar and the LLM's auto-execution path depend on it.
-- **LLM call failures**: no mention of timeout/retry behavior if OpenRouter/Cerebras errors or times out mid-chat. Does `/api/chat` surface a graceful error to the frontend, or retry once?
-- **`/api/health` contents (§8)**: does it just return 200, or also check DB connectivity and that the market-data background task is alive? Useful for Docker healthchecks.
-- **Sparkline persistence (§2, §10)**: sparklines are explicitly frontend-accumulated from SSE since page load, and there's no price-history table. Confirming this is intentional — a refresh resets all sparklines to empty. If that's acceptable for the demo, worth stating outright as a known/accepted limitation rather than leaving it implicit.
-
-### Possible Inaccuracy
-
-- **§10 Technical Notes**: "Canvas-based charting library preferred (Lightweight Charts or Recharts)" — Recharts renders via SVG, not canvas. Either drop Recharts from that parenthetical or adjust the wording (e.g., "Lightweight Charts, or SVG-based alternatives like Recharts").
-
-### Simplification Opportunities
-
-- **Docker wrapper duplication (§11)**: both a root `docker-compose.yml` ("optional convenience wrapper") and dedicated `start_mac.sh`/`start_windows.ps1` scripts exist, each presumably encoding the same port/volume/env-file config. Consider having the scripts simply shell out to `docker compose up`/`down` so the port/volume mapping lives in one place instead of two.
-- **`actions` JSON blob (§7, §9)**: the `chat_messages.actions` column stores a JSON blob of executed trades/watchlist changes. Since this is structurally the same shape as the LLM's structured-output `trades`/`watchlist_changes` fields (§9), it may be simplest to persist the LLM response object verbatim rather than defining a separately-shaped `actions` payload — one schema, one source of truth.
-- **Color scheme (§2)**: only the purple accent has a stated usage ("submit buttons"). A one-line mapping for yellow/blue (e.g., yellow = alerts/highlights, blue = links/secondary actions) would save the Frontend Engineer agent from having to invent conventions ad hoc.
