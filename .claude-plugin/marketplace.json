@@ -9,7 +9,7 @@
             "name": "independent-reviewer",
             "version": "1.0.0",
             "description": "A plugin that provides independent review capabilities for all changes since the last commit. It can be used to review code, documentation, or any other changes made in a project.",
-            "source": "https://github.com/AIGNishant/independent-reviewer",
+            "source": "./independent-reviewer",
             "author": {
                 "name": "AIGNishant",
                 "email": "nishant.apple.app@gmail.com"
