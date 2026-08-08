@@ -1,245 +1,237 @@
-# Market Simulator Design
+# Market Simulator
 
-Approach and code structure for simulating realistic stock prices when no Massive API key is configured.
+The built-in price simulator FinAlly uses when `MASSIVE_API_KEY` is not set (the
+default for most users). It generates believable, dramatic price action with no
+external dependencies, running as an in-process background task.
 
-## Overview
+It implements the `MarketDataSource` interface from `MARKET_INTERFACE.md` — the
+rest of the app cannot tell whether prices come from here or from Massive.
 
-The simulator uses **Geometric Brownian Motion (GBM)** to generate realistic stock price paths. GBM is the standard model underlying Black-Scholes option pricing — prices evolve continuously with random noise, can't go negative, and exhibit the lognormal distribution seen in real markets.
+---
 
-Updates run at ~500ms intervals, producing a continuous stream of price changes that feel alive.
+## 1. Goals
 
-## GBM Math
+- **Realistic-looking motion.** Prices wander like real stocks, not random noise.
+- **Dramatic enough for a demo.** Visible upticks/downticks every ~500ms, with
+  occasional sharp moves so the terminal feels alive.
+- **Correlated tickers.** Tech names tend to move together, so the watchlist
+  breathes as a market rather than 10 independent random walks.
+- **Deterministic when needed.** A seedable RNG so E2E tests can assert behavior.
+- **Zero dependencies, in-process.** Pure Python + `random` (optionally NumPy for
+  speed; not required at 10 tickers).
+- **Simple.** One small engine class. No market calendar, no order book.
 
-At each time step, a stock price evolves as:
+---
+
+## 2. The model — Geometric Brownian Motion (GBM)
+
+Real equity prices are modeled well by GBM, which keeps prices positive and
+makes returns (not absolute prices) the random quantity. One discrete step:
 
 ```
-S(t+dt) = S(t) * exp((mu - sigma^2/2) * dt + sigma * sqrt(dt) * Z)
+S(t+dt) = S(t) * exp( (mu - 0.5 * sigma^2) * dt + sigma * sqrt(dt) * Z )
 ```
 
-Where:
-- `S(t)` = current price
-- `mu` = annualized drift (expected return), e.g. 0.05 (5%)
-- `sigma` = annualized volatility, e.g. 0.20 (20%)
-- `dt` = time step as fraction of a trading year
-- `Z` = standard normal random variable (drawn from N(0,1))
+where:
 
-For our 500ms updates with ~252 trading days and ~6.5 hours per day:
+- `S(t)` — current price
+- `mu` — annual drift (expected return); small, per-ticker
+- `sigma` — annual volatility; per-ticker (tech > financials)
+- `dt` — time step as a fraction of a trading year
+- `Z` — a standard normal random draw (this is where correlation enters)
+
+### Choosing `dt`
+
+The simulator steps every 500ms. Scaling to a trading year keeps `mu`/`sigma` in
+familiar annualized units:
+
 ```
-dt = 0.5 / (252 * 6.5 * 3600) = ~8.5e-8
-```
-
-This tiny `dt` produces small, realistic per-tick moves.
-
-## Correlated Moves
-
-Real stocks don't move independently — tech stocks tend to move together, etc. We use a **Cholesky decomposition** of a correlation matrix to generate correlated random draws.
-
-Given a correlation matrix `C`, compute `L = cholesky(C)`. Then for independent standard normals `Z_independent`:
-```
-Z_correlated = L @ Z_independent
+seconds_per_trading_year = 252 * 6.5 * 3600   # 252 trading days x 6.5h
+dt = 0.5 / seconds_per_trading_year
 ```
 
-Default correlation groups:
-- **Tech**: AAPL, GOOGL, MSFT, AMZN, META, NVDA, NFLX — corr ~0.6 within group
-- **Finance**: JPM, V — corr ~0.5 within group
-- **Cross-group**: ~0.3 baseline correlation
-- **TSLA**: lower correlation with everything (~0.3) — it does its own thing
+With a realistic `sigma` (~0.3), per-step moves are small (fractions of a
+percent), which looks natural. Drama comes from the event mechanism (section 5),
+not from cranking volatility.
 
-## Random Events
+---
 
-Every step, each ticker has a small probability (~0.001) of a random event — a sudden 2-5% move. This adds drama and makes the dashboard visually interesting.
+## 3. Seed data
+
+Each ticker starts from a realistic price and gets its own drift/volatility. Tech
+names carry higher volatility; financials lower.
 
 ```python
-if random.random() < event_probability:
-    shock = random.uniform(0.02, 0.05) * random.choice([-1, 1])
-    price *= (1 + shock)
-```
+# backend/market/seeds.py
+from dataclasses import dataclass
 
-## Seed Prices
 
-Realistic starting prices for the default watchlist:
+@dataclass(frozen=True)
+class TickerSeed:
+    price: float
+    mu: float          # annual drift
+    sigma: float       # annual volatility
+    sector: str        # for correlation grouping
 
-```python
-SEED_PRICES: dict[str, float] = {
-    "AAPL": 190.0,
-    "GOOGL": 175.0,
-    "MSFT": 420.0,
-    "AMZN": 185.0,
-    "TSLA": 250.0,
-    "NVDA": 800.0,
-    "META": 500.0,
-    "JPM": 195.0,
-    "V": 280.0,
-    "NFLX": 600.0,
-}
-```
 
-Tickers added dynamically (not in the seed list) start at a random price between $50-$300.
-
-## Per-Ticker Parameters
-
-Each ticker has its own volatility to reflect real-world behavior:
-
-```python
-TICKER_PARAMS: dict[str, dict] = {
-    "AAPL":  {"sigma": 0.22, "mu": 0.05},
-    "GOOGL": {"sigma": 0.25, "mu": 0.05},
-    "MSFT":  {"sigma": 0.20, "mu": 0.05},
-    "AMZN":  {"sigma": 0.28, "mu": 0.05},
-    "TSLA":  {"sigma": 0.50, "mu": 0.03},   # High vol
-    "NVDA":  {"sigma": 0.40, "mu": 0.08},   # High vol, strong drift
-    "META":  {"sigma": 0.30, "mu": 0.05},
-    "JPM":   {"sigma": 0.18, "mu": 0.04},   # Low vol (bank)
-    "V":     {"sigma": 0.17, "mu": 0.04},   # Low vol (payments)
-    "NFLX":  {"sigma": 0.35, "mu": 0.05},
+SEEDS: dict[str, TickerSeed] = {
+    "AAPL": TickerSeed(190.0, 0.08, 0.28, "tech"),
+    "GOOGL": TickerSeed(175.0, 0.10, 0.30, "tech"),
+    "MSFT": TickerSeed(420.0, 0.09, 0.26, "tech"),
+    "AMZN": TickerSeed(185.0, 0.11, 0.33, "tech"),
+    "TSLA": TickerSeed(250.0, 0.05, 0.55, "tech"),
+    "NVDA": TickerSeed(880.0, 0.15, 0.50, "tech"),
+    "META": TickerSeed(500.0, 0.10, 0.35, "tech"),
+    "JPM":  TickerSeed(200.0, 0.06, 0.20, "financial"),
+    "V":    TickerSeed(275.0, 0.07, 0.19, "financial"),
+    "NFLX": TickerSeed(630.0, 0.09, 0.40, "tech"),
 }
 
-# Default for unknown tickers
-DEFAULT_PARAMS = {"sigma": 0.25, "mu": 0.05}
+DEFAULT_SEED = TickerSeed(100.0, 0.07, 0.30, "other")
 ```
 
-## Implementation
+Any ticker the user adds that is not in `SEEDS` is lazily created from
+`DEFAULT_SEED` (with the starting price nudged by the RNG so it is not always
+exactly $100). This mirrors the ten default watchlist tickers in `PLAN.md`.
+
+---
+
+## 4. Correlation
+
+To make sectors move together, each step draws one **market factor** and one
+**sector factor**, then blends them with a per-ticker idiosyncratic draw:
+
+```
+Z_ticker = w_m * Z_market + w_s * Z_sector + w_i * Z_idiosyncratic
+```
+
+with weights chosen so the components combine to roughly unit variance, e.g.
+`w_m = 0.5`, `w_s = 0.4`, `w_i = sqrt(1 - w_m^2 - w_s^2)`. This is a lightweight
+one-factor-per-sector correlation model — enough to make the watchlist visibly
+correlated without a full covariance matrix.
+
+---
+
+## 5. Random events (drama)
+
+On each step, with small probability (~0.5%), a ticker gets a one-off shock — a
+sudden 2-5% jump up or down — layered on top of its normal GBM move. This
+produces the occasional dramatic candle that makes the terminal exciting.
 
 ```python
+if rng.random() < EVENT_PROBABILITY:          # ~0.005 per ticker per step
+    shock = rng.uniform(0.02, 0.05)
+    price *= (1 + shock) if rng.random() < 0.5 else (1 - shock)
+```
+
+Events are independent per ticker (they punch through the correlation), so a
+single name can spike while the rest of its sector drifts.
+
+---
+
+## 6. Engine structure
+
+The engine owns per-ticker current prices and advances them one step per
+`step()` call. `SimulatedSource.get_prices` (see `MARKET_INTERFACE.md`) is a thin
+wrapper over `step()`.
+
+```python
+# backend/market/gbm.py
 import math
 import random
-import time
-import numpy as np
+from .seeds import SEEDS, DEFAULT_SEED, TickerSeed
 
-class GBMSimulator:
-    """Generates correlated GBM price paths for multiple tickers."""
+SECONDS_PER_YEAR = 252 * 6.5 * 3600
+DT = 0.5 / SECONDS_PER_YEAR
+EVENT_PROBABILITY = 0.005
 
-    def __init__(
-        self,
-        tickers: list[str],
-        dt: float = 8.5e-8,
-        event_probability: float = 0.001,
-    ):
-        self._dt = dt
-        self._event_prob = event_probability
+# correlation weights
+W_MARKET, W_SECTOR = 0.5, 0.4
+W_IDIO = math.sqrt(max(0.0, 1 - W_MARKET**2 - W_SECTOR**2))
+
+
+class SimEngine:
+    """Advances correlated GBM prices one 500ms step at a time."""
+
+    def __init__(self, seed: int | None = None) -> None:
+        self._rng = random.Random(seed)
         self._prices: dict[str, float] = {}
-        self._params: dict[str, dict] = {}
-        self._tickers: list[str] = []
-        self._cholesky: np.ndarray | None = None
+        self._seeds: dict[str, TickerSeed] = {}
 
-        for ticker in tickers:
-            self.add_ticker(ticker)
-
-    def add_ticker(self, ticker: str) -> None:
-        if ticker in self._prices:
-            return
-        self._tickers.append(ticker)
-        self._prices[ticker] = SEED_PRICES.get(ticker, random.uniform(50, 300))
-        self._params[ticker] = TICKER_PARAMS.get(ticker, DEFAULT_PARAMS)
-        self._rebuild_cholesky()
-
-    def remove_ticker(self, ticker: str) -> None:
+    def _ensure(self, ticker: str) -> None:
         if ticker not in self._prices:
-            return
-        self._tickers.remove(ticker)
-        del self._prices[ticker]
-        del self._params[ticker]
-        self._rebuild_cholesky()
+            base = SEEDS.get(ticker)
+            if base is None:
+                jitter = self._rng.uniform(0.5, 2.0)
+                base = TickerSeed(DEFAULT_SEED.price * jitter, DEFAULT_SEED.mu,
+                                  DEFAULT_SEED.sigma, DEFAULT_SEED.sector)
+            self._seeds[ticker] = base
+            self._prices[ticker] = base.price
 
-    def step(self) -> dict[str, float]:
-        """Advance one time step. Returns {ticker: new_price}."""
-        n = len(self._tickers)
-        if n == 0:
-            return {}
+    def step(self, tickers: list[str]) -> dict[str, float]:
+        for t in tickers:
+            self._ensure(t)
 
-        # Generate correlated random normals
-        z_independent = np.random.standard_normal(n)
-        if self._cholesky is not None:
-            z = self._cholesky @ z_independent
-        else:
-            z = z_independent
+        z_market = self._rng.gauss(0, 1)
+        sector_factors: dict[str, float] = {}
 
-        result = {}
-        for i, ticker in enumerate(self._tickers):
-            params = self._params[ticker]
-            mu = params["mu"]
-            sigma = params["sigma"]
+        out: dict[str, float] = {}
+        for t in tickers:
+            seed = self._seeds[t]
+            if seed.sector not in sector_factors:
+                sector_factors[seed.sector] = self._rng.gauss(0, 1)
+            z = (W_MARKET * z_market
+                 + W_SECTOR * sector_factors[seed.sector]
+                 + W_IDIO * self._rng.gauss(0, 1))
 
-            # GBM step
-            drift = (mu - 0.5 * sigma**2) * self._dt
-            diffusion = sigma * math.sqrt(self._dt) * z[i]
-            self._prices[ticker] *= math.exp(drift + diffusion)
+            drift = (seed.mu - 0.5 * seed.sigma**2) * DT
+            diffusion = seed.sigma * math.sqrt(DT) * z
+            price = self._prices[t] * math.exp(drift + diffusion)
 
-            # Random event
-            if random.random() < self._event_prob:
-                shock = random.uniform(0.02, 0.05) * random.choice([-1, 1])
-                self._prices[ticker] *= (1 + shock)
+            if self._rng.random() < EVENT_PROBABILITY:
+                shock = self._rng.uniform(0.02, 0.05)
+                price *= (1 + shock) if self._rng.random() < 0.5 else (1 - shock)
 
-            result[ticker] = round(self._prices[ticker], 2)
-
-        return result
-
-    def get_price(self, ticker: str) -> float | None:
-        return self._prices.get(ticker)
-
-    def _rebuild_cholesky(self) -> None:
-        """Rebuild the Cholesky decomposition of the correlation matrix."""
-        n = len(self._tickers)
-        if n <= 1:
-            self._cholesky = None
-            return
-
-        corr = np.eye(n)
-        for i in range(n):
-            for j in range(i + 1, n):
-                rho = self._get_correlation(self._tickers[i], self._tickers[j])
-                corr[i, j] = rho
-                corr[j, i] = rho
-
-        self._cholesky = np.linalg.cholesky(corr)
-
-    def _get_correlation(self, t1: str, t2: str) -> float:
-        """Return pairwise correlation between two tickers."""
-        tech = {"AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "NFLX"}
-        finance = {"JPM", "V"}
-
-        t1_tech = t1 in tech
-        t2_tech = t2 in tech
-        t1_fin = t1 in finance
-        t2_fin = t2 in finance
-
-        # Same sector: higher correlation
-        if t1_tech and t2_tech:
-            return 0.6
-        if t1_fin and t2_fin:
-            return 0.5
-
-        # TSLA is a loner
-        if t1 == "TSLA" or t2 == "TSLA":
-            return 0.3
-
-        # Cross-sector or unknown
-        if (t1_tech and t2_fin) or (t1_fin and t2_tech):
-            return 0.3
-
-        # Default
-        return 0.3
+            price = round(max(price, 0.01), 2)
+            self._prices[t] = price
+            out[t] = price
+        return out
 ```
 
-## File Structure
+Notes:
 
-All simulator code lives in a single module:
+- **State persists across calls.** The engine remembers each price, so motion is
+  a continuous walk, not fresh random values each tick.
+- **Lazy seeding** handles user-added tickers without special cases.
+- **`round(..., 2)`** keeps prices to cents. The `max(price, 0.01)` guard keeps
+  GBM positive (it mathematically cannot hit zero, but rounding could).
+- **Deterministic** when constructed with a fixed `seed` — used by E2E tests.
 
-```
-backend/
-  app/
-    market/
-      simulator.py       # GBMSimulator class + seed data + SimulatorDataSource
-      seed_prices.py      # SEED_PRICES, TICKER_PARAMS, DEFAULT_PARAMS (constants)
-```
+---
 
-`seed_prices.py` contains just the constant dictionaries. `simulator.py` contains the `GBMSimulator` class and the `SimulatorDataSource` (the `MarketDataSource` implementation that wraps `GBMSimulator` in an async loop).
+## 7. Cadence and integration
 
-## Behavior Notes
+- The engine advances once per feed-loop cycle; `SimulatedSource.poll_interval_
+  seconds = 0.5`, giving ~500ms updates as specified in `PLAN.md`.
+- The `MarketFeed` (see `MARKET_INTERFACE.md`) computes `previous_price` and
+  up/down `direction` from consecutive prices and writes `PriceTick`s to the
+  shared cache. The simulator itself only needs to return `{ticker: price}`.
+- Because motion is continuous, the frontend sparklines and detail chart
+  accumulate a smooth, realistic-looking series from the SSE stream.
 
-- Prices never go negative (GBM is multiplicative — `exp()` is always positive)
-- The tiny `dt` produces sub-cent moves per tick, which accumulate naturally over time
-- With `sigma=0.50` (TSLA), a day of simulated trading produces roughly the right intraday range
-- The correlation matrix must be positive semi-definite — Cholesky decomposition guarantees this for valid correlation matrices
-- Random events happen ~0.1% of steps = roughly once every 500 seconds per ticker. With 10 tickers, expect an event somewhere roughly every 50 seconds — enough to keep it interesting
-- When a new ticker is added mid-session, the Cholesky matrix is rebuilt. This is O(n^2) but n is small (<50 tickers)
+---
+
+## 8. Testing the simulator
+
+- **Determinism:** `SimEngine(seed=42).step([...])` twice from fresh instances
+  yields identical sequences.
+- **Positivity:** prices never drop to or below zero across many steps.
+- **Plausible magnitude:** typical per-step return magnitude is well under 1%
+  (excluding events); mean step count between events matches `EVENT_PROBABILITY`.
+- **Correlation:** within a step, same-sector tickers show same-sign moves more
+  often than cross-sector pairs.
+- **Lazy tickers:** `step(["FOO"])` on an unseeded symbol returns a positive
+  price and reuses it on the next call.
+
+These are pure-function unit tests — no network, no async, fast and reproducible,
+matching the backend testing strategy in `PLAN.md`.

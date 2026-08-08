@@ -1,104 +1,71 @@
 # Market Data Backend — Summary
 
-**Status:** Complete, tested, reviewed, all issues resolved.
+Status: **Implemented** (`backend/market/`, `backend/config.py`, `backend/main.py`,
+`backend/db/`). Full design rationale and copy-pasteable reference code are
+archived in `planning/archive/` (`MARKET_DATA_DESIGN.md`, `MARKET_INTERFACE.md`,
+`MARKET_SIMULATOR.md`, `MASSIVE_API.md`) — read those only if you need the *why*
+behind a decision below. This file is the quick-reference for other agents
+building on top of the market data subsystem (portfolio, chat, frontend).
 
-## What Was Built
-
-A complete market data subsystem in `backend/app/market/` (8 modules, ~500 lines) providing live price simulation and real market data via a unified interface.
-
-### Architecture
+## What exists
 
 ```
-MarketDataSource (ABC)
-├── SimulatorDataSource  →  GBM simulator (default, no API key needed)
-└── MassiveDataSource    →  Polygon.io REST poller (when MASSIVE_API_KEY set)
-        │
-        ▼
-   PriceCache (thread-safe, in-memory)
-        │
-        ├──→ SSE stream endpoint (/api/stream/prices)
-        ├──→ Portfolio valuation
-        └──→ Trade execution
+backend/
+├── pyproject.toml       # uv project: fastapi, uvicorn, httpx, python-dotenv
+├── config.py            # Settings — the only place env vars are read
+├── main.py              # FastAPI app, lifespan wiring, GET /api/health
+├── db/
+│   ├── connection.py    # lazy sqlite schema init + seed (users_profile,
+│   │                     watchlist, positions) at db/finally.db
+│   └── reads.py         # load_active_tickers() — watchlist ∪ open positions
+├── market/
+│   ├── types.py          # PriceTick, Bar, Direction
+│   ├── source.py          # MarketDataSource ABC: get_prices, get_history, aclose
+│   ├── cache.py            # PriceCache — in-memory, lock-guarded, one PriceTick/ticker
+│   ├── feed.py              # MarketFeed — single background writer to the cache
+│   ├── factory.py            # make_source() — env-driven source selection
+│   ├── seeds.py                # per-ticker GBM seed params (the 10 default tickers)
+│   ├── gbm.py                    # SimEngine — correlated GBM + synthetic history
+│   ├── simulator.py                # SimulatedSource (default, no key needed)
+│   ├── massive.py                    # MassiveSource (used when MASSIVE_API_KEY is set)
+│   └── routes.py                       # GET /api/stream/prices, GET /api/history/{ticker}
+└── tests/                # pytest + pytest-asyncio; no network, deterministic (seeded)
 ```
 
-### Modules
+## How to consume it (for the portfolio/chat/frontend agents)
 
-| File | Purpose |
-|------|---------|
-| `models.py` | `PriceUpdate` — immutable frozen dataclass (ticker, price, previous_price, timestamp, change, direction) |
-| `interface.py` | `MarketDataSource` — abstract base class defining `start/stop/add_ticker/remove_ticker/get_tickers` |
-| `cache.py` | `PriceCache` — thread-safe price store with version counter for SSE change detection |
-| `seed_prices.py` | Realistic seed prices, per-ticker GBM params (drift/volatility), correlation groups |
-| `simulator.py` | `GBMSimulator` (Geometric Brownian Motion with Cholesky-correlated moves) + `SimulatorDataSource` |
-| `massive_client.py` | `MassiveDataSource` — REST polling client for Polygon.io via the `massive` package |
-| `factory.py` | `create_market_data_source()` — selects simulator or Massive based on `MASSIVE_API_KEY` env var |
-| `stream.py` | `create_stream_router()` — FastAPI SSE endpoint factory using version-based change detection |
+- **Live prices**: read `app.state.price_cache` (a `PriceCache`). Call
+  `await cache.snapshot()` to get `{ticker: PriceTick}` for portfolio valuation,
+  or `await cache.get(ticker)` for one ticker. Never call a source directly.
+- **Historical bars for a chart**: `GET /api/history/{ticker}?days=90` — works
+  identically whether the simulator or Massive is active.
+- **Live stream for the frontend**: `GET /api/stream/prices` (SSE). Each event's
+  `data:` payload is a `PriceTick` JSON object:
+  `{ticker, price, previous_price, direction, timestamp}`.
+- **Watchlist/positions table access**: `db/reads.py` only exposes
+  `load_active_tickers()`. The portfolio agent owns the rest of `db/` (trades,
+  portfolio_snapshots, chat_messages, and the full CRUD needed for watchlist
+  management and trade execution) — extend `db/connection.py`'s schema rather
+  than replacing it, since `watchlist` and `positions` are already relied on by
+  the market feed.
+- **Source selection**: automatic. `MASSIVE_API_KEY` set and non-empty →
+  `MassiveSource`; otherwise → `SimulatedSource`. Nothing downstream needs to
+  know which one is active.
 
-### Key Design Decisions
+## Key behaviors to rely on
 
-- **Strategy pattern** — both data sources implement the same ABC; downstream code is source-agnostic
-- **PriceCache as single point of truth** — producers write, consumers read; no direct coupling
-- **GBM with correlated moves** — Cholesky decomposition of sector-based correlation matrix; tech stocks correlate at 0.6, finance at 0.5, cross-sector at 0.3
-- **Random shock events** — ~0.1% chance per tick per ticker of a 2-5% move for visual drama
-- **SSE over WebSockets** — simpler, one-way push, universal browser support
+- The feed primes the cache synchronously on startup (`feed.prime()`), so the
+  first request always has data — no empty-cache race.
+- `load_active_tickers()` returns the **union** of watchlist tickers and tickers
+  with an open position (`quantity > 0`), so a position in a de-watchlisted
+  ticker stays priced for valuation.
+- Source failures (Massive rate limits, bad key, transport errors) never raise
+  into the feed loop — they return `{}`/`[]` and the cache simply holds its last
+  values.
+- `SIM_SEED` env var makes the simulator fully deterministic — useful for E2E
+  tests that need reproducible price sequences.
 
-## Test Suite
+## Testing
 
-**73 tests, all passing.** 6 test modules in `backend/tests/market/`.
-
-| Module | Tests | Coverage |
-|--------|-------|----------|
-| test_models.py | 11 | models.py: 100% |
-| test_cache.py | 13 | cache.py: 100% |
-| test_simulator.py | 17 | simulator.py: 98% |
-| test_simulator_source.py | 10 | (integration tests) |
-| test_factory.py | 7 | factory.py: 100% |
-| test_massive.py | 13 | massive_client.py: 56% (expected — API methods mocked) |
-
-Overall coverage: 84%.
-
-## Code Review & Fixes Applied
-
-A comprehensive code review identified 7 issues. All were resolved:
-
-1. **pyproject.toml build config** — added `[tool.hatch.build.targets.wheel] packages = ["app"]`
-2. **Lazy imports removed** — `massive` is a core dependency; imports moved to top level
-3. **SSE return type fixed** — `_generate_events` annotated as `AsyncGenerator[str, None]`
-4. **Public `get_tickers()`** — added to `GBMSimulator` to avoid private attribute access
-5. **Correlation constants cleaned up** — removed unused `DEFAULT_CORR`, consolidated into `CROSS_GROUP_CORR`
-6. **Unused test imports removed** — `pytest`, `math`, `asyncio` cleaned from 4 test files
-7. **Massive test mocks fixed** — `source._client` set in tests, patches target correct names
-
-## Demo
-
-A Rich terminal demo is available at `backend/market_data_demo.py`:
-
-```bash
-cd backend
-uv run market_data_demo.py
-```
-
-Displays a live-updating dashboard with all 10 tickers, sparklines, color-coded direction arrows, and an event log for notable price moves. Runs 60 seconds or until Ctrl+C.
-
-## Usage for Downstream Code
-
-```python
-from app.market import PriceCache, create_market_data_source
-
-# Startup
-cache = PriceCache()
-source = create_market_data_source(cache)  # Reads MASSIVE_API_KEY
-await source.start(["AAPL", "GOOGL", "MSFT", ...])
-
-# Read prices
-update = cache.get("AAPL")          # PriceUpdate or None
-price = cache.get_price("AAPL")     # float or None
-all_prices = cache.get_all()        # dict[str, PriceUpdate]
-
-# Dynamic watchlist
-await source.add_ticker("TSLA")
-await source.remove_ticker("GOOGL")
-
-# Shutdown
-await source.stop()
-```
+`cd backend && uv sync && uv run pytest` — all tests are deterministic, mock
+network calls (`httpx.MockTransport` for Massive), and require no API key.

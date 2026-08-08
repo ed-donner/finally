@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# FinAlly runtime database (volume-mounted; keep the directory, ignore the file)
+db/*.db
+db/*.db-journal
+!db/.gitkeep
