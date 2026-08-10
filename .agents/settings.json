@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": ".*",
+        "type": "command",
+        "command": "node .agents/scripts/run_review.js",
+        "enabled": true
+      }
+    ]
+  }
+}
