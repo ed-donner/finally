@@ -1,0 +1,5 @@
+
+slash command
+    type /somethign   llm uses that file for code generation  
+
+67/ builds review.md uisn reviewer agent  

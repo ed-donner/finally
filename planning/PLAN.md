@@ -454,3 +454,35 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Document Review & Feedback
+
+### Questions & Underspecified Areas
+1. **Dynamic / Custom Watchlist Tickers**:
+   - How should the Market Simulator respond when a user adds an arbitrary new ticker (e.g. `COIN` or `AMD`) that was not part of the initial 10 default tickers? Should the simulator dynamically generate GBM parameters (drift/volatility) for any new symbol, or should additions be constrained to a supported universe?
+2. **Initial Sparkline Data on Page Load**:
+   - Sparkline charts are specified to accumulate on the frontend from SSE ticks since page load. On initial render, sparklines will be empty. Should `/api/watchlist` optionally return a small seed array of recent price ticks (e.g., 20 historical points) so sparklines are rendered immediately without waiting for SSE stream accumulation?
+3. **FastAPI Client-Side Route Fallback**:
+   - Next.js static export (`output: 'export'`) builds single HTML SPA pages. How should FastAPI handle direct page refreshes or deep links (e.g. `/portfolio`) to prevent 404 response codes from FastAPI's static file handler? (Recommendation: Configure FastAPI catch-all route to fallback to `index.html`).
+
+### Clarifications & Design Considerations
+1. **SQLite Concurrency & WAL Mode**:
+   - The 30-second portfolio snapshot background task and user API requests (trades, chat, watchlist) perform concurrent SQLite writes. SQLite default journal mode can lead to `database is locked` operational errors.
+   - *Clarification*: Formally require `PRAGMA journal_mode=WAL;` and `PRAGMA busy_timeout=5000;` during database connection initialization.
+2. **Atomic Trade Execution Pipeline**:
+   - Trade execution involves updating `users_profile` (cash balance), `positions` (upsert/delete), writing to `trades` (append log), and recording a `portfolio_snapshots` entry. All these operations must be wrapped in a single ACID database transaction to prevent inconsistent portfolio state.
+3. **LLM Trade Execution Price Source**:
+   - When the LLM tool call or structured output includes trades (e.g., `{"ticker": "AAPL", "side": "buy", "quantity": 10}`), trade execution must obtain the current price from the shared in-memory price cache at the instant of execution rather than relying on any price mentioned in the LLM response text.
+4. **SSE Reconnection State Sync**:
+   - When an SSE connection drops and reconnects, the client should query `/api/watchlist` and `/api/portfolio` to resynchronize local state before resuming rendering from incoming SSE stream events.
+
+### Opportunities to Simplify
+1. **Deterministic GBM Parameter Generation for Any Symbol**:
+   - Instead of maintaining a fixed dictionary of ticker parameters, compute drift and volatility for any ticker symbol using a deterministic hash function (e.g., `hash(symbol)`). This allows the simulator to support any custom ticker seamlessly with zero extra configuration.
+2. **Unified Trade Execution Service Function**:
+   - Share a single internal execution function (`execute_trade(user_id, ticker, side, quantity)`) for both direct user API orders (`POST /api/portfolio/trade`) and AI-directed trades from `/api/chat`. This ensures identical validation, logging, cash deduction, and error reporting across both entry points.
+3. **In-Memory Portfolio Valuation for Snapshots**:
+   - Compute total portfolio value on-the-fly using `cash_balance + sum(quantity * cached_price for position in positions)`. This keeps `portfolio_snapshots` creation lightweight and ensures snapshot background workers use the exact same pricing model as API routes.
+
