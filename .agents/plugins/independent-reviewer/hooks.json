@@ -1,0 +1,12 @@
+{
+  "independent-reviewer": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node .agents/scripts/run_review.js",
+        "timeout": 180
+      }
+    ]
+  }
+}
