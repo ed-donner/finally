@@ -42,7 +42,9 @@ class MarketDataSource(ABC):
     async def add_ticker(self, ticker: str) -> None:
         """Add a ticker to the active set. No-op if already present.
 
-        The next update cycle will include this ticker.
+        The next update cycle will include this ticker. Behavior before
+        start() has been called is implementation-defined — callers should
+        always start() before adding tickers.
         """
 
     @abstractmethod

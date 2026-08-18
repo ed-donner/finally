@@ -1,5 +1,7 @@
 """Tests for PriceCache."""
 
+from concurrent.futures import ThreadPoolExecutor
+
 from app.market.cache import PriceCache
 
 
@@ -101,3 +103,39 @@ class TestPriceCache:
         cache = PriceCache()
         update = cache.update("AAPL", 190.12345)
         assert update.price == 190.12
+
+    def test_concurrent_writers_do_not_corrupt_state(self):
+        """Stress the lock with real OS threads (relevant because the Massive
+        path's synchronous SDK calls run via asyncio.to_thread, i.e. a real
+        thread, alongside the simulator/SSE reader on the event loop).
+
+        Many threads hammer update()/get()/remove() on overlapping tickers
+        concurrently; afterwards the cache must be internally consistent:
+        no lost/corrupted PriceUpdate, and the version counter must equal
+        exactly the number of update() calls that ran (no missed increments,
+        no double counting)."""
+        cache = PriceCache()
+        tickers = [f"T{i}" for i in range(8)]
+        writes_per_ticker = 200
+
+        def hammer(ticker: str) -> None:
+            for i in range(writes_per_ticker):
+                cache.update(ticker, price=100.0 + i)
+                cache.get(ticker)
+                cache.get_all()
+                if i % 50 == 0:
+                    cache.remove(ticker)
+
+        with ThreadPoolExecutor(max_workers=len(tickers)) as pool:
+            list(pool.map(hammer, tickers))
+
+        # Every ticker ends with a well-formed, non-corrupted update.
+        for ticker in tickers:
+            update = cache.get(ticker)
+            assert update is not None
+            assert update.ticker == ticker
+            assert update.price == 100.0 + (writes_per_ticker - 1)
+
+        # version is bumped exactly once per update() call, with no lost
+        # or duplicated increments under concurrent access.
+        assert cache.version == len(tickers) * writes_per_ticker

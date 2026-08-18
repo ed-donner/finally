@@ -13,6 +13,22 @@ class TestGBMSimulator:
         result = sim.step()
         assert set(result.keys()) == {"AAPL", "GOOGL"}
 
+    def test_full_default_watchlist_steps_successfully(self):
+        """The production correlation structure (tech intra=0.6, finance
+        intra=0.5, TSLA=0.3, cross=0.3) is a non-trivial block matrix, not
+        simple equicorrelation. Confirm Cholesky decomposition succeeds and
+        step() runs cleanly for the real 10-ticker default watchlist rather
+        than only the 1-2 ticker cases exercised elsewhere in this file."""
+        tickers = list(SEED_PRICES.keys())
+        sim = GBMSimulator(tickers=tickers)
+        assert sim._cholesky is not None
+
+        for _ in range(100):
+            result = sim.step()
+            assert set(result.keys()) == set(tickers)
+            for price in result.values():
+                assert price > 0
+
     def test_prices_are_positive(self):
         """GBM prices can never go negative (exp() is always positive)."""
         sim = GBMSimulator(tickers=["AAPL"])
@@ -126,6 +142,6 @@ class TestGBMSimulator:
         result = sim.step()
         price_str = str(result["AAPL"])
         # Check that we have at most 2 decimal places
-        if '.' in price_str:
-            decimal_part = price_str.split('.')[1]
+        if "." in price_str:
+            decimal_part = price_str.split(".")[1]
             assert len(decimal_part) <= 2

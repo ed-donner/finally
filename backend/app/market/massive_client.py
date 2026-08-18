@@ -40,7 +40,7 @@ class MassiveDataSource(MarketDataSource):
 
     async def start(self, tickers: list[str]) -> None:
         self._client = RESTClient(api_key=self._api_key)
-        self._tickers = list(tickers)
+        self._tickers = [t.upper().strip() for t in tickers]
 
         # Do an immediate first poll so the cache has data right away
         await self._poll_once()
@@ -99,10 +99,10 @@ class MassiveDataSource(MarketDataSource):
             for snap in snapshots:
                 try:
                     price = snap.last_trade.price
-                    # Massive timestamps are Unix milliseconds → convert to seconds
-                    timestamp = snap.last_trade.timestamp / 1000.0
+                    # Massive timestamps are Unix nanoseconds → convert to seconds
+                    timestamp = snap.last_trade.sip_timestamp / 1_000_000_000.0
                     self._cache.update(
-                        ticker=snap.ticker,
+                        ticker=snap.ticker.upper().strip(),
                         price=price,
                         timestamp=timestamp,
                     )
