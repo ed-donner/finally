@@ -40,7 +40,7 @@ class MassiveDataSource(MarketDataSource):
 
     async def start(self, tickers: list[str]) -> None:
         self._client = RESTClient(api_key=self._api_key)
-        self._tickers = list(tickers)
+        self._tickers = [t.upper().strip() for t in tickers]
 
         # Do an immediate first poll so the cache has data right away
         await self._poll_once()

@@ -184,6 +184,21 @@ class TestMassiveDataSource:
         await source.stop()
         assert source._task is None
 
+    async def test_start_normalizes_ticker_case(self):
+        """start() must normalize tickers the same way add_ticker/remove_ticker
+        do, so the same call produces the same casing regardless of which
+        method (or which data source) is used."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
+
+        with patch("app.market.massive_client.RESTClient"):
+            with patch.object(source, "_fetch_snapshots", return_value=[]):
+                await source.start(["aapl", " googl "])
+
+        assert source.get_tickers() == ["AAPL", "GOOGL"]
+
+        await source.stop()
+
     async def test_start_immediate_poll(self):
         """Test that start() does an immediate poll before starting the loop."""
         cache = PriceCache()

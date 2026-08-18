@@ -124,6 +124,42 @@ class TestSimulatorDataSource:
 
         await source.stop()
 
+    async def test_start_normalizes_ticker_case(self):
+        """Tickers passed to start() are normalized to uppercase, matching
+        MassiveDataSource, so the unified interface behaves consistently
+        regardless of which source is active."""
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=0.1)
+        await source.start(["aapl", " googl "])
+
+        assert set(source.get_tickers()) == {"AAPL", "GOOGL"}
+        assert cache.get("AAPL") is not None
+        assert cache.get("aapl") is None
+
+        await source.stop()
+
+    async def test_add_ticker_normalizes_case(self):
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=0.1)
+        await source.start(["AAPL"])
+
+        await source.add_ticker("tsla")
+        assert "TSLA" in source.get_tickers()
+        assert cache.get("TSLA") is not None
+
+        await source.stop()
+
+    async def test_remove_ticker_normalizes_case(self):
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=0.1)
+        await source.start(["AAPL", "TSLA"])
+
+        await source.remove_ticker("tsla")
+        assert "TSLA" not in source.get_tickers()
+        assert cache.get("TSLA") is None
+
+        await source.stop()
+
     async def test_custom_event_probability(self):
         """Test creating source with custom event probability."""
         cache = PriceCache()
