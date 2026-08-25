@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "stops": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codewhale exec auto \"review changes since last commit and suggest improvements and resulst in a doccuments planning/codewhale-reveiw.md\""
+          }
+        ]
+      }
+    ]
+  }
+}
