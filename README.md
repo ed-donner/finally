@@ -1,62 +1,61 @@
 # FinAlly — AI Trading Workstation
 
-A visually stunning AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM chat assistant that can analyze positions and execute trades via natural language.
+FinAlly (Finance Ally) is a visually stunning, AI-powered trading workstation: it streams live market data, lets you trade a simulated portfolio, and includes an LLM chat assistant that can analyze your positions and execute trades on your behalf. Think Bloomberg terminal with an AI copilot.
 
-Built entirely by coding agents as a capstone project for an agentic AI coding course.
+This is the capstone project for an agentic AI coding course — built entirely by coding agents to demonstrate how orchestrated AI agents can produce a production-quality full-stack application.
 
-## Features
+## Status
 
-- **Live price streaming** via SSE with green/red flash animations
-- **Simulated portfolio** — $10k virtual cash, market orders, instant fills
-- **Portfolio visualizations** — heatmap (treemap), P&L chart, positions table
-- **AI chat assistant** — analyzes holdings, suggests and auto-executes trades
-- **Watchlist management** — track tickers manually or via AI
-- **Dark terminal aesthetic** — Bloomberg-inspired, data-dense layout
+The project is under active development. The **market data subsystem** (live-price simulator, Massive/Polygon.io client, price cache, SSE streaming) is complete and lives in `backend/app/market/`. The rest of the platform — portfolio/trading, watchlist, LLM chat, frontend, and Docker packaging — is still to be built.
+
+See [`planning/PLAN.md`](planning/PLAN.md) for the full project specification, and [`planning/MARKET_DATA_SUMMARY.md`](planning/MARKET_DATA_SUMMARY.md) for details on the completed market data component.
 
 ## Architecture
 
-Single Docker container serving everything on port 8000:
+A single Docker container, single port (8000):
 
-- **Frontend**: Next.js (static export) with TypeScript and Tailwind CSS
-- **Backend**: FastAPI (Python/uv) with SSE streaming
-- **Database**: SQLite with lazy initialization
-- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
-- **Market data**: Built-in GBM simulator (default) or Massive API (optional)
+- **Frontend**: Next.js + TypeScript, built as a static export, served by FastAPI
+- **Backend**: FastAPI (Python), managed with `uv`
+- **Database**: SQLite, volume-mounted for persistence
+- **Real-time data**: Server-Sent Events (SSE)
+- **AI**: LiteLLM → OpenRouter (Cerebras inference), structured outputs for trade execution
+- **Market data**: simulator by default, real data via the Massive API if a key is provided
 
-## Quick Start
+Full rationale and details are in `planning/PLAN.md`.
+
+## Getting Started (backend, current state)
 
 ```bash
-# Clone and configure
-cp .env.example .env
-# Add your OPENROUTER_API_KEY to .env
-
-# Run with Docker
-docker build -t finally .
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
-
-# Open http://localhost:8000
+cd backend
+uv sync --extra dev        # install dependencies
+uv run --extra dev pytest  # run tests
+uv run market_data_demo.py # live terminal dashboard with simulated prices
 ```
+
+See [`backend/CLAUDE.md`](backend/CLAUDE.md) and [`backend/README.md`](backend/README.md) for backend developer docs.
+
+A one-command Docker launch (`scripts/start_mac.sh` / `scripts/start_windows.ps1`) is planned once the frontend and portfolio/chat backend are in place.
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
-| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
+```bash
+OPENROUTER_API_KEY=   # required for LLM chat
+MASSIVE_API_KEY=      # optional; enables real market data instead of the simulator
+LLM_MOCK=false        # set true for deterministic mock LLM responses (testing)
+```
 
 ## Project Structure
 
 ```
 finally/
-├── frontend/    # Next.js static export
-├── backend/     # FastAPI uv project
-├── planning/    # Project documentation and agent contracts
-├── test/        # Playwright E2E tests
-├── db/          # SQLite volume mount (runtime)
-└── scripts/     # Start/stop helpers
+├── frontend/     # Next.js TypeScript app (static export) — planned
+├── backend/      # FastAPI uv project — market data implemented
+├── planning/     # Project specification and design docs for agents
+├── scripts/      # Docker start/stop scripts — planned
+├── test/         # Playwright E2E tests — planned
+└── db/           # SQLite volume mount point
 ```
 
 ## License
 
-See [LICENSE](LICENSE).
+See [`LICENSE`](LICENSE).

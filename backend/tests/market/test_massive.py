@@ -8,13 +8,13 @@ from app.market.cache import PriceCache
 from app.market.massive_client import MassiveDataSource
 
 
-def _make_snapshot(ticker: str, price: float, timestamp_ms: int) -> MagicMock:
+def _make_snapshot(ticker: str, price: float, timestamp_ns: int) -> MagicMock:
     """Create a mock Massive snapshot object."""
     snap = MagicMock()
     snap.ticker = ticker
     snap.last_trade = MagicMock()
     snap.last_trade.price = price
-    snap.last_trade.timestamp = timestamp_ms
+    snap.last_trade.sip_timestamp = timestamp_ns
     return snap
 
 
@@ -34,8 +34,8 @@ class TestMassiveDataSource:
         source._client = MagicMock()  # Satisfy the _poll_once guard
 
         mock_snapshots = [
-            _make_snapshot("AAPL", 190.50, 1707580800000),
-            _make_snapshot("GOOGL", 175.25, 1707580800000),
+            _make_snapshot("AAPL", 190.50, 1707580800000000000),
+            _make_snapshot("GOOGL", 175.25, 1707580800000000000),
         ]
 
         with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
@@ -55,7 +55,7 @@ class TestMassiveDataSource:
         source._tickers = ["AAPL", "BAD"]
         source._client = MagicMock()  # Satisfy the _poll_once guard
 
-        good_snap = _make_snapshot("AAPL", 190.50, 1707580800000)
+        good_snap = _make_snapshot("AAPL", 190.50, 1707580800000000000)
         bad_snap = MagicMock()
         bad_snap.ticker = "BAD"
         bad_snap.last_trade = None  # Will cause AttributeError
@@ -84,7 +84,7 @@ class TestMassiveDataSource:
         assert cache.get_price("AAPL") is None  # No update happened
 
     async def test_timestamp_conversion(self):
-        """Test that timestamps are converted from milliseconds to seconds."""
+        """Test that timestamps are converted from nanoseconds to seconds."""
         cache = PriceCache()
         source = MassiveDataSource(
             api_key="test-key",
@@ -94,7 +94,7 @@ class TestMassiveDataSource:
         source._tickers = ["AAPL"]
         source._client = MagicMock()  # Satisfy the _poll_once guard
 
-        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000)]
+        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000000000)]
 
         with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
             await source._poll_once()
@@ -189,7 +189,7 @@ class TestMassiveDataSource:
         cache = PriceCache()
         source = MassiveDataSource(api_key="test-key", price_cache=cache, poll_interval=60.0)
 
-        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000)]
+        mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000000000)]
 
         with patch("app.market.massive_client.RESTClient"):
             with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):

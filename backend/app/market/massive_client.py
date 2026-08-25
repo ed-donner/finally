@@ -6,7 +6,6 @@ import asyncio
 import logging
 
 from massive import RESTClient
-from massive.rest.models import SnapshotMarketType
 
 from .cache import PriceCache
 from .interface import MarketDataSource
@@ -21,8 +20,11 @@ class MassiveDataSource(MarketDataSource):
     tickers in a single API call, then writes results to the PriceCache.
 
     Rate limits:
-      - Free tier: 5 req/min → poll every 15s (default)
-      - Paid tiers: higher limits → poll every 2-5s
+      - Free (Basic) tier: does not include this endpoint at all (403) — a
+        Starter plan or above is required for get_snapshot_all.
+      - Starter and above: effectively unlimited (soft guidance: stay under
+        100 req/s), so the poll interval is a design choice rather than a
+        rate-limit constraint; default here is a conservative 15s.
     """
 
     def __init__(
@@ -99,8 +101,8 @@ class MassiveDataSource(MarketDataSource):
             for snap in snapshots:
                 try:
                     price = snap.last_trade.price
-                    # Massive timestamps are Unix milliseconds → convert to seconds
-                    timestamp = snap.last_trade.timestamp / 1000.0
+                    # LastTrade timestamps are Unix nanoseconds → convert to seconds
+                    timestamp = snap.last_trade.sip_timestamp / 1_000_000_000
                     self._cache.update(
                         ticker=snap.ticker,
                         price=price,
@@ -122,7 +124,4 @@ class MassiveDataSource(MarketDataSource):
 
     def _fetch_snapshots(self) -> list:
         """Synchronous call to the Massive REST API. Runs in a thread."""
-        return self._client.get_snapshot_all(
-            market_type=SnapshotMarketType.STOCKS,
-            tickers=self._tickers,
-        )
+        return self._client.get_snapshot_all("stocks", self._tickers)
