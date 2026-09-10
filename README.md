@@ -1,60 +1,79 @@
 # FinAlly — AI Trading Workstation
 
-A visually stunning AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM chat assistant that can analyze positions and execute trades via natural language.
+An AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM assistant that can analyse positions and execute trades through natural language.
 
-Built entirely by coding agents as a capstone project for an agentic AI coding course.
+Built by coding agents as the capstone project for an agentic AI coding course. The full specification is in [planning/PLAN.md](planning/PLAN.md), which agents use as their shared contract.
 
-## Features
+## Status
 
-- **Live price streaming** via SSE with green/red flash animations
-- **Simulated portfolio** — $10k virtual cash, market orders, instant fills
-- **Portfolio visualizations** — heatmap (treemap), P&L chart, positions table
-- **AI chat assistant** — analyzes holdings, suggests and auto-executes trades
-- **Watchlist management** — track tickers manually or via AI
-- **Dark terminal aesthetic** — Bloomberg-inspired, data-dense layout
+Early development. Only the market data subsystem is built.
 
-## Architecture
+| Component | State |
+| --- | --- |
+| Market data — simulator, Massive API client, price cache, SSE endpoint | Built, 73 tests passing |
+| Database, portfolio, trading | Not started |
+| LLM chat assistant | Not started |
+| Frontend | Not started |
+| Docker packaging | Not started |
 
-Single Docker container serving everything on port 8000:
+There is no runnable application yet — no Dockerfile, no frontend, no API server. The sections below describe what exists today.
 
-- **Frontend**: Next.js (static export) with TypeScript and Tailwind CSS
-- **Backend**: FastAPI (Python/uv) with SSE streaming
-- **Database**: SQLite with lazy initialization
-- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
-- **Market data**: Built-in GBM simulator (default) or Massive API (optional)
+## Running what exists
 
-## Quick Start
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-# Clone and configure
-cp .env.example .env
-# Add your OPENROUTER_API_KEY to .env
+cd backend
+uv sync
 
-# Run with Docker
-docker build -t finally .
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
+# Live terminal dashboard: 10 tickers with sparklines and colour-coded moves.
+# Runs 60 seconds, or until Ctrl+C. No API key needed.
+uv run market_data_demo.py
 
-# Open http://localhost:8000
+# Test suite
+uv run pytest
 ```
 
-## Environment Variables
+## Market data
+
+Two interchangeable sources sit behind one abstract interface (`MarketDataSource`):
+
+- **Simulator** (default) — geometric Brownian motion with per-ticker drift and volatility, sector-correlated moves, and occasional random shocks. Runs in-process with no external dependencies.
+- **Massive API** (optional) — REST polling against Polygon.io. Selected automatically when `MASSIVE_API_KEY` is set.
+
+Both write to a thread-safe `PriceCache`. Everything downstream — the SSE endpoint, and later portfolio valuation and trade execution — reads from that cache and never touches the source directly, so the rest of the system does not care which one is running.
+
+Module-level detail is in [planning/MARKET_DATA_SUMMARY.md](planning/MARKET_DATA_SUMMARY.md).
+
+## Environment variables
+
+Create a `.env` file in the project root:
 
 | Variable | Required | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
-| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | Later | OpenRouter key for the AI chat assistant. Not used yet. |
+| `MASSIVE_API_KEY` | No | Polygon.io key for real market data. Omit to use the simulator. |
+| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses in tests. |
 
-## Project Structure
+## Planned architecture
+
+A single Docker container serving everything on port 8000:
+
+- **Frontend** — a static build served by FastAPI, so there is one origin and no CORS setup
+- **Backend** — FastAPI managed with uv, pushing live prices over SSE
+- **Database** — SQLite, a single volume-mounted file
+- **AI** — LiteLLM to OpenRouter, using structured outputs to drive trade execution
+
+## Project structure
 
 ```
 finally/
-├── frontend/    # Next.js static export
-├── backend/     # FastAPI uv project
-├── planning/    # Project documentation and agent contracts
-├── test/        # Playwright E2E tests
-├── db/          # SQLite volume mount (runtime)
-└── scripts/     # Start/stop helpers
+├── backend/              FastAPI uv project
+│   ├── app/market/       Market data subsystem (built)
+│   └── tests/            Unit and integration tests
+└── planning/             Specification and agent contracts
+    ├── PLAN.md
+    └── MARKET_DATA_SUMMARY.md
 ```
 
 ## License
