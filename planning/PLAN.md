@@ -22,7 +22,7 @@ The user runs a single Docker command (or a provided start script). A browser op
 ### What the User Can Do
 
 - **Watch prices stream** — prices flash green (uptick) or red (downtick) with subtle CSS animations that fade
-- **View sparkline mini-charts** — price action beside each ticker in the watchlist, accumulated on the frontend from the SSE stream since page load (sparklines fill in progressively)
+- **View sparkline mini-charts** — price action beside each ticker in the watchlist, accumulated on the frontend from the SSE stream since page load (sparklines fill in progressively, and intentionally reset to empty on a page refresh — no server-side price history is stored for this purpose)
 - **Click a ticker** to see a larger detailed chart in the main chart area
 - **Buy and sell shares** — market orders only, instant fill at current price, no fees, no confirmation dialog
 - **Monitor their portfolio** — a heatmap (treemap) showing positions sized by weight and colored by P&L, plus a P&L chart tracking total portfolio value over time
@@ -33,7 +33,7 @@ The user runs a single Docker command (or a provided start script). A browser op
 ### Visual Design
 
 - **Dark theme**: backgrounds around `#0d1117` or `#1a1a2e`, muted gray borders, no pure black
-- **Price flash animations**: brief green/red background highlight on price change, fading over ~500ms via CSS transitions
+- **Price flash animations**: brief green/red background highlight on price change, fading over ~300ms via CSS transitions — shorter than the ~500ms simulator tick so flashes don't visually overlap on an actively-moving ticker
 - **Connection status indicator**: a small colored dot (green = connected, yellow = reconnecting, red = disconnected) visible in the header
 - **Professional, data-dense layout**: inspired by Bloomberg/trading terminals — every pixel earns its place
 - **Responsive but desktop-first**: optimized for wide screens, functional on tablet
@@ -101,7 +101,7 @@ finally/
 ├── db/                       # Volume mount target (SQLite file lives here at runtime)
 │   └── .gitkeep              # Directory exists in repo; finally.db is gitignored
 ├── Dockerfile                # Multi-stage build (Node → Python)
-├── docker-compose.yml        # Optional convenience wrapper
+├── docker-compose.yml        # Optional local-dev convenience wrapper (not used by scripts/)
 ├── .env                      # Environment variables (gitignored, .env.example committed)
 └── .gitignore
 ```
@@ -114,7 +114,7 @@ finally/
 - **`db/`** at the top level is the runtime volume mount point. The SQLite file (`db/finally.db`) is created here by the backend and persists across container restarts via Docker volume.
 - **`planning/`** contains project-wide documentation, including this plan. All agents reference files here as the shared contract.
 - **`test/`** contains Playwright E2E tests and supporting infrastructure (e.g., `docker-compose.test.yml`). Unit tests live within `frontend/` and `backend/` respectively, following each framework's conventions.
-- **`scripts/`** contains start/stop scripts that wrap Docker commands.
+- **`scripts/`** contains start/stop scripts that wrap plain `docker build`/`docker run` commands directly — they do not use `docker-compose.yml`, which exists purely as an optional convenience for local development outside the scripts.
 
 ---
 
@@ -156,13 +156,9 @@ Both the simulator and the Massive client implement the same abstract interface.
 - Starts from realistic seed prices (e.g., AAPL ~$190, GOOGL ~$175, etc.)
 - Runs as an in-process background task — no external dependencies
 
-### Massive API (Optional)
+### Massive API (Optional, Real Data)
 
-- REST API polling (not WebSocket) — simpler, works on all tiers
-- Polls for the union of all watched tickers on a configurable interval
-- Free tier (5 calls/min): poll every 15 seconds
-- Paid tiers: poll every 2-15 seconds depending on tier
-- Parses REST response into the same format as the simulator
+An optional real-data mode backed by Polygon.io via the `massive` package — REST polling (not WebSocket), one poll per interval for the union of all watched tickers, parsed into the same format the simulator produces. Poll interval scales with API tier (~15s on the free tier, down to 2-15s on paid tiers). Implementation detail lives in `planning/MARKET_DATA_SUMMARY.md`; the simulator remains the recommended default and this mode is not required to run the app.
 
 ### Shared Price Cache
 
@@ -175,7 +171,7 @@ Both the simulator and the Massive client implement the same abstract interface.
 
 - Endpoint: `GET /api/stream/prices`
 - Long-lived SSE connection; client uses native `EventSource` API
-- Server pushes price updates for all tickers known to the system at a regular cadence (~500ms) — in the single-user model this is equivalent to the user's watchlist
+- The server does not push a fixed-cadence snapshot of every ticker — it watches the price cache's version counter and emits an event only for a ticker whose price actually changed. In practice, with the simulator ticking every ~500ms, this looks like a near-regular ~500ms stream of updates, but clients should not assume every ticker fires on every tick.
 - Each SSE event contains ticker, price, previous price, timestamp, and change direction
 - Client handles reconnection automatically (EventSource has built-in retry)
 
@@ -193,7 +189,7 @@ The backend checks for the SQLite database on startup (or first request). If the
 
 ### Schema
 
-All tables include a `user_id` column defaulting to `"default"`. This is hardcoded for now (single-user) but enables future multi-user support without schema migration.
+All tables include a `user_id` column defaulting to `"default"`. This is hardcoded for now (single-user) but enables future multi-user support without schema migration. This is a deliberate exception to "no speculative generality" — the column costs nothing to carry now and avoids a schema migration if multi-user is ever added post-course.
 
 **users_profile** — User state (cash balance)
 - `id` TEXT PRIMARY KEY (default: `"default"`)
@@ -211,17 +207,18 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 - `id` TEXT PRIMARY KEY (UUID)
 - `user_id` TEXT (default: `"default"`)
 - `ticker` TEXT
-- `quantity` REAL (fractional shares supported)
+- `quantity` REAL (fractional shares supported, rounded to 4 decimal places)
 - `avg_cost` REAL
 - `updated_at` TEXT (ISO timestamp)
 - UNIQUE constraint on `(user_id, ticker)`
+- When a sell brings `quantity` to exactly 0, the row is deleted rather than kept at zero — so the heatmap and positions table never show an empty/zero-weight entry
 
-**trades** — Trade history (append-only log)
+**trades** — Trade history (append-only log). Not surfaced in the UI for v1 (no dedicated endpoint or view) — retained for potential future use (e.g. a trade log view) and for debugging.
 - `id` TEXT PRIMARY KEY (UUID)
 - `user_id` TEXT (default: `"default"`)
 - `ticker` TEXT
 - `side` TEXT (`"buy"` or `"sell"`)
-- `quantity` REAL (fractional shares supported)
+- `quantity` REAL (fractional shares supported, rounded to 4 decimal places)
 - `price` REAL
 - `executed_at` TEXT (ISO timestamp)
 
@@ -270,6 +267,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 ### Chat
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/chat` | Recent chat history, so the chat panel can rehydrate after a page refresh |
 | POST | `/api/chat` | Send a message, receive complete JSON response (message + executed actions) |
 
 ### System
@@ -290,7 +288,7 @@ There is an OPENROUTER_API_KEY in the .env file in the project root.
 When the user sends a chat message, the backend:
 
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
-2. Loads recent conversation history from the `chat_messages` table
+2. Loads the last 20 messages (10 user/assistant turns) from the `chat_messages` table — a fixed window, not the full history, so the prompt stays within the model's context budget regardless of session length. The same query backs `GET /api/chat` for frontend rehydration.
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
 4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
 5. Parses the complete structured JSON response
@@ -315,7 +313,7 @@ The LLM is instructed to respond with JSON matching this schema:
 ```
 
 - `message` (required): The conversational text shown to the user
-- `trades` (optional): Array of trades to auto-execute. Each trade goes through the same validation as manual trades (sufficient cash for buys, sufficient shares for sells)
+- `trades` (optional): Array of trades to auto-execute. Each trade goes through the same validation as manual trades (sufficient cash for buys, sufficient shares for sells), and `quantity` is rounded to 4 decimal places, matching the trade bar and the `positions`/`trades` schema
 - `watchlist_changes` (optional): Array of watchlist modifications
 
 ### Auto-Execution
@@ -357,7 +355,7 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 - **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by P&L (green = profit, red = loss)
 - **P&L chart** — line chart showing total portfolio value over time, using data from `portfolio_snapshots`
 - **Positions table** — tabular view of all positions: ticker, quantity, avg cost, current price, unrealized P&L, % change
-- **Trade bar** — simple input area: ticker field, quantity field, buy button, sell button. Market orders, instant fill.
+- **Trade bar** — simple input area: ticker field, quantity field (accepts fractional shares up to 4 decimal places), buy button, sell button. Market orders, instant fill.
 - **AI chat panel** — docked/collapsible sidebar. Message input, scrolling conversation history, loading indicator while waiting for LLM response. Trade executions and watchlist changes shown inline as confirmations.
 - **Header** — portfolio total value (updating live), connection status indicator, cash balance
 
@@ -454,3 +452,4 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
