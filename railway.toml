@@ -1,0 +1,18 @@
+# Railway "config as code" for FinAlly. Railway picks this file up from the repo root.
+# Docs: https://docs.railway.com/reference/config-as-code
+#
+# Things this file cannot set (do them in the Railway dashboard, see deploy/RAILWAY.md):
+#   - the persistent Volume mounted at /app/db
+#   - environment variables (OPENROUTER_API_KEY, RAILWAY_RUN_UID, ...)
+#   - the public domain
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Railway marks a deploy healthy once this returns 200, then routes traffic to it.
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

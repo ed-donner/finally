@@ -1,0 +1,44 @@
+# Keep the build context small and keep secrets and local state out of the image.
+
+# Version control and editor/agent config
+.git
+.gitignore
+.claude
+.vscode
+.idea
+
+# Secrets: pass these at runtime (--env-file / compose env_file), never bake them in
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Local runtime database (the volume provides this in the container)
+db/
+
+# Node
+**/node_modules
+frontend/.next
+frontend/out
+**/*.tsbuildinfo
+
+# Python
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.coverage
+
+# Not needed at runtime
+planning
+backend/tests
+backend/market_data_demo.py
+test
+scripts
+*.md
+!backend/README.md
+Dockerfile
+docker-compose*.yml
+railway.toml
+deploy

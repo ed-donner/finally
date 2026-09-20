@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0d1117;
+  color: #e6edf3;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Price flash: a brief green/red background that fades out over 500ms (PLAN.md section 2). */
+@keyframes flash-up {
+  from {
+    background-color: rgba(63, 185, 80, 0.45);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+@keyframes flash-down {
+  from {
+    background-color: rgba(248, 81, 73, 0.45);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.flash-up {
+  animation: flash-up 500ms ease-out;
+}
+.flash-down {
+  animation: flash-down 500ms ease-out;
+}
+
+/* Reconnecting pulse for the connection dot. */
+@keyframes pulse-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+/* Slim dark scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #30363d transparent;
+}
+
+/* Tabular figures keep changing numbers from jittering. */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}

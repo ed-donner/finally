@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings: a CRLF "#!/usr/bin/env bash\r" fails on macOS/Linux,
+# even when the file was committed from Windows with core.autocrlf enabled.
+*.sh text eol=lf
+Dockerfile text eol=lf

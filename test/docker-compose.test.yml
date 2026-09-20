@@ -1,0 +1,51 @@
+# E2E test stack: the real production image + a separate Playwright container (PLAN.md section 12).
+#
+# Run (from the project root):
+#   docker compose -f test/docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from playwright
+# Clean up afterwards:
+#   docker compose -f test/docker-compose.test.yml down -v
+#
+# The command's exit code is the test result. Screenshots, traces and videos of failures appear in
+# test/test-results/, and the HTML report in test/playwright-report/.
+
+name: finally-e2e
+
+services:
+  # Not named "app": Chromium force-upgrades http://app to https (".app" is an HSTS-preloaded TLD).
+  webapp:
+    # Exactly the production Dockerfile ("same setup as production").
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      # Deterministic, free, instant LLM replies. Real API keys are deliberately NOT passed in, so
+      # the suite can never spend money or depend on the network.
+      LLM_MOCK: "true"
+    # A fresh, empty database on every start, so "$10,000 cash, default watchlist" always holds.
+    # uid/gid match the non-root user in the production image.
+    tmpfs:
+      - /app/db:uid=10001,gid=10001,mode=0755
+    # Poll quickly so the tests start as soon as the app is up (the image default is every 30s).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 3s
+
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      webapp:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://webapp:8000
+      CI: "true"
+    # Recommended by Playwright for Chromium in Docker (avoids shared-memory crashes).
+    ipc: host
+    init: true
+    volumes:
+      - ./test-results:/work/test-results
+      - ./playwright-report:/work/playwright-report

@@ -1,0 +1,27 @@
+# Convenience wrapper around the single FinAlly container (PLAN.md section 11).
+#
+#   docker compose up --build      # build and start on http://localhost:8000
+#   docker compose down            # stop; the database volume is kept
+#   docker compose down -v         # stop AND delete the database (fresh $10,000 portfolio)
+
+services:
+  finally:
+    build: .
+    image: finally
+    container_name: finally
+    ports:
+      - "8000:8000"
+    # API keys (OPENROUTER_API_KEY, optional MASSIVE_API_KEY, LLM_MOCK) come from .env.
+    # `required: false` lets the container start without it; chat then reports a missing key.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Named volume: the SQLite database survives restarts and rebuilds.
+      - finally-data:/app/db
+    restart: unless-stopped
+
+volumes:
+  finally-data:
+    # Fixed name (no compose-project prefix) so this and scripts/start_*.sh|ps1 share one database.
+    name: finally-data
