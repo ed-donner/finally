@@ -454,3 +454,48 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## Review Feedback
+
+### Classification
+
+- **Purpose:** Product specification and implementation contract for a single-user trading workstation MVP.
+- **Audience:** Coding agents and engineers implementing the frontend, backend, infrastructure, and tests.
+- **Maturity:** Detailed early-stage plan. The major user workflows and technology choices are defined, but several cross-component contracts still need decisions before implementation can be considered complete.
+- **Document type:** Primarily a specification, with architectural decision records and a delivery checklist mixed in.
+
+### Questions
+
+- What is the exact JSON response and error schema for every REST endpoint, especially failed trades, invalid tickers, duplicate watchlist additions, and missing market prices?
+- Are ticker symbols restricted to the seeded/default universe, or may users add any symbol accepted by Massive? How are symbol casing and validation handled?
+- Which price is authoritative when a manual or LLM trade is executed: the latest cache value, a newly fetched value, or a price supplied by the client? What happens if the cache has no price or is stale?
+- What transaction and concurrency guarantees protect cash, positions, trades, and portfolio snapshots when two requests arrive at once or an LLM returns multiple trades?
+- What does “daily change %” mean for simulator data, and where is the reference price stored for both simulator and Massive data?
+- How should the application behave when `OPENROUTER_API_KEY` is absent, invalid, rate-limited, or unavailable? Can the rest of the workstation run without chat?
+- Does the backend truly read `.env` from the project root inside the container, or are environment variables expected to be injected by Docker? Which approach is the supported one?
+- What retention or size limit applies to `chat_messages` and `portfolio_snapshots`?
+- Which API and UI behavior is required on a narrow mobile viewport if the product is explicitly desktop-first?
+- Is `docker-compose.yml` part of the supported user path, or is the single `docker run` command the only documented deployment workflow?
+
+### Feedback
+
+- The plan has a strong end-to-end narrative: the default simulator, SSE stream, shared price cache, portfolio actions, chat actions, and mocked LLM mode form a coherent demo path.
+- The single-user assumption is clear in the UX and deployment sections, but the repeated `user_id` columns and future multi-user claims add complexity without defining an authentication boundary. Either document this as intentional forward compatibility or defer the columns until multi-user support is actually designed.
+- The trade model needs explicit numeric constraints. Define whether quantities and prices must be finite and positive, the allowed precision for fractional shares, and whether balances are rounded to cents or stored at greater precision.
+- “No confirmation dialog” and automatic LLM execution are appropriate for simulated money, but the API should still expose executed, rejected, and partially failed actions distinctly so the UI and chat history cannot imply that every requested action succeeded.
+- The simulator and Massive source should share a documented freshness/error contract. Without one, the frontend cannot reliably distinguish a valid unchanged price from a disconnected or stale feed.
+- The deployment section says the database is lazy-initialized “on startup (or first request),” while the architecture and persistence behavior imply startup initialization. Choose one lifecycle and test it explicitly.
+- The plan names implementation technologies and preferred libraries, but it does not define version ranges or minimum runtime requirements for Node, Python, Docker, and browsers. A small compatibility section would reduce setup failures.
+- The test strategy is useful but should include idempotent initialization, concurrent trade requests, stale/missing prices, failed LLM actions, malformed SSE events, and restart persistence.
+- The document includes the instruction to use the `cerebras-inference` skill, but that skill is an external implementation dependency rather than a stable system requirement. State the required LiteLLM/OpenRouter model configuration directly in the project contract as well.
+
+### Opportunities to Simplify
+
+- Combine the “Architecture Overview” decision table with the relevant implementation sections, or keep the table as the single source of truth and link to details instead of repeating decisions later.
+- Remove the future multi-user rationale from the MVP database section unless the schema is intentionally being designed for that migration now. This would make the single-user scope easier to understand.
+- Define one canonical API contract section with request bodies, success responses, error responses, and SSE event payloads. The current endpoint table is a useful index but too sparse to coordinate independent agents.
+- Reduce deployment options for the core path to one supported command and move Docker Compose, cloud platforms, Terraform, and browser-opening behavior into a short optional section.
+- Replace repeated phrases such as “single-user,” “same origin,” and “static export” with a short set of project-wide invariants referenced by the relevant sections.
+- Turn the testing lists into a compact acceptance checklist grouped by market data, portfolio, chat, and deployment. This will make completion status easier to track than prose bullets spread across the plan.
