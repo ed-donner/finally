@@ -1,0 +1,11 @@
+{
+  "name": "independent-reviewer",
+  "description": "A plugin that reviews code changes and generates a review report.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Aidin Teymouri",
+    "email": "aidintv@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": ["code review", "automation", "plugin"]
+}

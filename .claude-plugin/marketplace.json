@@ -1,0 +1,21 @@
+{
+  "name": "aidin-tools",
+  "description": "A plugin that reviews code changes and generates a review report.",
+  "version": "1.0.0",
+  "author": "Aidin Teymouri",
+  "license": "MIT",
+  "owner": {
+    "name": "Aidin Teymouri",
+    "email": "aidintv@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "independent-reviewer",
+      "source": "./independent-reviewer",
+      "author": {
+        "name": "Aidin Teymouri",
+        "email": "aidintv@gmail.com"
+      }
+    }
+  ]
+}
