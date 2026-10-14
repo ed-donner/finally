@@ -39,11 +39,11 @@ docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
-| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
+| Variable             | Required | Description                                                          |
+| -------------------- | -------- | -------------------------------------------------------------------- |
+| `OPENROUTER_API_KEY` | Yes      | OpenRouter API key for AI chat                                       |
+| `MASSIVE_API_KEY`    | No       | Massive (Polygon.io) key for real market data; omit to use simulator |
+| `LLM_MOCK`           | No       | Set `true` for deterministic mock LLM responses (testing)            |
 
 ## Project Structure
 
@@ -60,3 +60,4 @@ finally/
 ## License
 
 See [LICENSE](LICENSE).
+Aidin
