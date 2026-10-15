@@ -1,0 +1,18 @@
+{
+    "name": "independent-reviewer",
+    "owner": {
+        "name": "neerajkumar",
+        "email": "neeraj0926@gmail.com"
+    },
+    "plugins": [
+        {
+            "name": "independent-reviewer",
+            "source":"./independent-reviewer",
+            "version": "1.0.0",
+            "description": "Carry out independent review of all changes since last commit",
+            "author":{
+                "name": "neerajkumar",
+                "email": "neeraj0926@gmail.com"}
+        }
+    ]
+}
