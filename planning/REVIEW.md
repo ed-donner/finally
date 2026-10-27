@@ -1,15 +1,17 @@
-# Review: Changes Since Last Commit
+﻿# Review: Changes Since Last Commit
+
+Reviewed commit `5b43955` against its parent (`14550e1`), which is the one commit on `main` not yet in `origin/main`.
 
 ## Findings
 
-### [P1] The documented Docker quick start cannot build the image
+### [P1] Quick Start cannot build the advertised app
 
-`README.md:35` tells users to run `docker build -t finally .`, but there is no `Dockerfile` in the repository. A clean checkout therefore cannot build the image, so the documented startup path fails before launch. Add the Docker setup or change the quick start to use an available startup path.
+`README.md` instructs users to run `docker build -t finally .`, but the commit adds no Dockerfile and the repository has none. A clean checkout cannot build the image, so the documented Quick Start stops at its first command. Add the Docker build setup or point the Quick Start to a runnable path.
 
-### [P2] The Docker run command requires a `.env` file described as optional
+### [P2] Quick Start requires a `.env` file it calls optional
 
-`README.md:34-36` describes creating `.env` as optional, then always passes `--env-file .env`. Docker exits if that path does not exist; a clean checkout does not contain a tracked `.env`. Omit `--env-file` when no file is present, or make creating the file an explicit prerequisite with a committed example.
+The README says creating `.env` is optional, then always passes `--env-file .env` to `docker run`. Docker fails when the file is absent, as it is in a clean checkout. Make that option conditional or document creation of the file as required.
 
 ## Scope and checks
 
-Reviewed tracked diffs and new files since `HEAD`, including README/planning changes and Claude plugin, hook, and reviewer configuration. Confirmed the repository has no `Dockerfile` or `scripts/` directory and no tracked `.env`. `git diff --check HEAD` reported no whitespace errors.
+Reviewed the commit's README, planning, and Claude plugin/hook configuration changes. Confirmed there is no tracked Dockerfile, `scripts/` directory, or `.env` file. `git diff --check HEAD^ HEAD` reports trailing whitespace in `.claude/agents/codex-reviewer.md` (line 5). No application tests were run; the commit changes documentation and agent configuration, not application code.
