@@ -166,7 +166,7 @@ Both the simulator and the Massive client implement the same abstract interface.
 - Paid tiers: poll every 2-15 seconds depending on tier
 - Parses REST response into the same format as the simulator
 - Validates a newly added or traded ticker that is not yet in the cache with one single-ticker snapshot call; a ticker with no data is rejected. These calls count against the rate limit: on the free tier, polling uses 4 of the 5 calls/min, leaving 1 spare for validation
-- Prices are stale outside market hours; this is acceptable. The UI shows a small "market closed" label only when Massive data is stale (the simulator runs 24/7)
+- Prices are stale outside market hours; this is acceptable. The UI shows a small "market closed" label only when Massive data is stale, meaning no price update for more than 60 seconds (the simulator runs 24/7)
 
 ### Shared Price Cache
 
@@ -302,7 +302,7 @@ Total value is `cash + sum(quantity * current_price)`. The P&L chart baseline is
 
 ### Error Contract
 
-Errors use the body `{"error": "<code>", "detail": "..."}`, for example `{"error": "insufficient_cash", "detail": "..."}`. Validation errors (including a malformed ticker) return 400. Unknown tickers return 404: this only happens with Massive, when a ticker has no quote. The simulator accepts any well-formed ticker. The chat flow reports each trade's error individually.
+Errors use the body `{"error": "<code>", "detail": "..."}`, for example `{"error": "insufficient_cash", "detail": "..."}`. The full set of codes: `invalid_ticker`, `invalid_quantity`, `insufficient_cash`, `insufficient_shares`, `unknown_ticker`, `duplicate_watchlist`, `not_in_watchlist`. Validation errors (including a malformed ticker) return 400. Unknown tickers return 404: this only happens with Massive, when a ticker has no quote. The simulator accepts any well-formed ticker. The chat flow reports each trade's error individually.
 
 ---
 
@@ -310,7 +310,7 @@ Errors use the body `{"error": "<code>", "detail": "..."}`, for example `{"error
 
 When writing code to make calls to LLMs, use the official Anthropic Python SDK (`anthropic`), configured entirely from the `.env` file in the project root: `ANTHROPIC_AUTH_TOKEN` (auth token), `ANTHROPIC_BASE_URL` (endpoint) and `ANTHROPIC_MODEL` (model name). The SDK reads the token and base URL from the environment on its own; the backend loads `ANTHROPIC_MODEL` and passes it as the `model` argument on every call. Never hardcode the model, endpoint or token. Structured Outputs should be used to interpret the results.
 
-Structured-output support on the configured gateway and model is unverified. There is no standalone smoke test; the first `/api/chat` increment tests it. Fallback order: native structured output, then a forced tool call, then parsing JSON from text with one retry.
+Structured-output support on the configured gateway and model is unverified. There is no standalone smoke test; the first `/api/chat` increment tests it. Fallback order: native structured output via the SDK, then a forced tool call, then parsing JSON from text with one retry. Start with the native path and verify it on the first `/api/chat` increment. Before relying on `ANTHROPIC_AUTH_TOKEN`, check the current SDK docs for how it is read.
 
 ### How It Works
 
@@ -369,7 +369,7 @@ The LLM should be prompted as "FinAlly, an AI trading assistant" with instructio
 When `LLM_MOCK=true`, the backend returns deterministic mock responses instead of calling the Anthropic API:
 Matching is case-insensitive and checked in this order:
 - A message containing "buy" returns a buy of 1 AAPL (this wins even if the message also contains "add")
-- Otherwise, a message containing "add X" returns a watchlist add of X, where X is the word after "add", uppercased
+- Otherwise, a message containing the whole word "add" followed by a ticker-shaped token (1-5 characters from A-Z, `.`, `-`) returns a watchlist add of that token, uppercased; words like "address" do not match
 - Anything else returns a fixed text reply
 
 This enables:
@@ -385,9 +385,9 @@ This enables:
 
 The frontend is a single-page application with a dense, terminal-inspired layout. The specific component architecture and layout system is up to the Frontend Engineer, but the UI should include these elements:
 
-- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from SSE since page load)
+- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from every SSE tick since page load, capped at the last 120 points per ticker)
 - **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here.
-- **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by P&L (green = profit, red = loss)
+- **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by unrealized P&L % relative to average cost, the same measure as the positions table (green = profit, red = loss)
 - **P&L chart** — line chart showing total portfolio value over time, using data from `portfolio_snapshots`
 - **Positions table** — tabular view of all positions: ticker, quantity, avg cost, current price, unrealized P&L, % change (relative to avg cost)
 - **Trade bar** — simple input area: ticker field, quantity field, buy button, sell button. Market orders, instant fill.
@@ -443,15 +443,29 @@ The backend writes `finally.db` to `/app/db` in the container. The top-level `db
 - Builds the Docker image if not already built (or if `--build` flag passed)
 - Runs the container with the named volume, port mapping, and `--env-file .env`
 - Prints the URL to access the app
-- Opens the browser only when an optional flag is passed
+- Opens the browser only when the optional `--open` flag is passed
 
 **`scripts/stop_mac.sh`** (macOS/Linux):
 - Stops and removes the running container
 - Does NOT remove the volume (data persists)
 
-**`scripts/start_windows.ps1`** / **`scripts/stop_windows.ps1`**: PowerShell equivalents for Windows, with the same `--build` and optional browser-open flags.
+**`scripts/start_windows.ps1`** / **`scripts/stop_windows.ps1`**: PowerShell equivalents for Windows, with the same `--build` and `--open` flags (PowerShell: `-Build`, `-Open`).
 
 All scripts are thin wrappers around `docker build/run/stop/rm` and should be idempotent — safe to run multiple times. There is no root `docker-compose.yml`.
+
+---
+
+## 11a. Implementation Order
+
+Small increments; each is validated before the next starts. Market data is already done.
+
+1. Backend skeleton: FastAPI app, lifespan that initialises and seeds SQLite, `GET /api/health`, uv setup, pytest
+2. Portfolio service (unit tests first), then `POST /api/portfolio/trade`, `GET /api/portfolio`, `GET /api/portfolio/history`
+3. Watchlist endpoints and `POST /api/portfolio/reset`
+4. SSE endpoint `/api/stream/prices` wired to the existing price cache
+5. Frontend static shell served by FastAPI (header, watchlist), then chart, heatmap, P&L chart, positions table and trade bar, one at a time
+6. Chat: mock mode first, then the real LLM path
+7. Dockerfile, start/stop scripts, Playwright E2E tests
 
 ---
 
