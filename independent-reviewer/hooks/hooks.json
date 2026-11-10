@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+        {
+          "hooks": [
+              {
+          "type": "command",
+          "command": "powershell -NoProfile -Command \"if (-not \\$env:FINALLY_HOOK) { \\$env:FINALLY_HOOK = '1'; claude --agent change_reviewer -p 'Review all changes since the last commit and write the result to planning/REVIEW.md' }\""
+              }
+          ]
+        }
+    ]
+  }
+}
