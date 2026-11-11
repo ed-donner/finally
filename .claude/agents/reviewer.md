@@ -1,8 +1,0 @@
----
-name: reviewer
-description: carry out a comprehensive review when requested
-tools: Read, Glob, Grep, Write
-model: sonnet
----
-
-You review the file planning/PLAN.md and write your feedback to planning/REVIEW_PLAN.md
