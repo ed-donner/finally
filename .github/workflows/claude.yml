@@ -56,3 +56,5 @@ jobs:
           #       "NODE_ENV": "test"
           #     }
           #   }
+        env:
+          ANTHROPIC_BASE_URL: https://api.servicesessentials.ibm.com
