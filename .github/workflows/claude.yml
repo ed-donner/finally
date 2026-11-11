@@ -35,11 +35,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-<<<<<<< HEAD
           show_full_output: true
-=======
->>>>>>> 2b30fd20f038683cf7f3730515764e05971450c7
-
           # Optional: Customize the trigger phrase (default: @claude)
           # trigger_phrase: "/claude"
 
@@ -59,8 +55,6 @@ jobs:
           #     "env": {
           #       "NODE_ENV": "test"
           #     }
-<<<<<<< HEAD
           #   }
-=======
-          #   }
->>>>>>> 2b30fd20f038683cf7f3730515764e05971450c7
+        env:
+          ANTHROPIC_BASE_URL: https://api.servicesessentials.ibm.com
