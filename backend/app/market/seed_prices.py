@@ -1,6 +1,8 @@
 """Seed prices and per-ticker parameters for the market simulator."""
 
-# Realistic starting prices for the default watchlist (as of project creation)
+import hashlib
+
+# Realistic starting prices for the default watchlist
 SEED_PRICES: dict[str, float] = {
     "AAPL": 190.00,
     "GOOGL": 175.00,
@@ -30,18 +32,27 @@ TICKER_PARAMS: dict[str, dict[str, float]] = {
     "NFLX": {"sigma": 0.35, "mu": 0.05},
 }
 
-# Default parameters for tickers not in the list above (dynamically added)
+# Default parameters for tickers not in the table (added at runtime)
 DEFAULT_PARAMS: dict[str, float] = {"sigma": 0.25, "mu": 0.05}
 
 # Correlation groups for the simulator's Cholesky decomposition
-# Tickers in the same group have higher intra-group correlation
 CORRELATION_GROUPS: dict[str, set[str]] = {
     "tech": {"AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "NFLX"},
     "finance": {"JPM", "V"},
 }
 
-# Correlation coefficients
 INTRA_TECH_CORR = 0.6  # Tech stocks move together
 INTRA_FINANCE_CORR = 0.5  # Finance stocks move together
 CROSS_GROUP_CORR = 0.3  # Between sectors / unknown tickers
 TSLA_CORR = 0.3  # TSLA does its own thing
+
+
+def seed_price_for(ticker: str) -> float:
+    """Starting price: table value, else a stable pseudo-random $50.00-$299.99.
+
+    Deterministic (hash of the symbol), so a ticker gets the same seed on every restart.
+    """
+    if ticker in SEED_PRICES:
+        return SEED_PRICES[ticker]
+    h = int(hashlib.sha256(ticker.encode()).hexdigest()[:8], 16)
+    return round(50 + (h % 25_000) / 100, 2)

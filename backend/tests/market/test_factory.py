@@ -1,7 +1,6 @@
-"""Tests for market data source factory."""
+"""Tests for create_market_data_source."""
 
-import os
-from unittest.mock import patch
+import pytest
 
 from app.market.cache import PriceCache
 from app.market.factory import create_market_data_source
@@ -9,71 +8,47 @@ from app.market.massive_client import MassiveDataSource
 from app.market.simulator import SimulatorDataSource
 
 
-class TestFactory:
-    """Tests for create_market_data_source factory."""
+@pytest.fixture(autouse=True)
+def clean_env(monkeypatch):
+    monkeypatch.delenv("MASSIVE_API_KEY", raising=False)
+    monkeypatch.delenv("MASSIVE_POLL_INTERVAL", raising=False)
 
-    def test_creates_simulator_when_no_api_key(self):
-        """Test that simulator is created when MASSIVE_API_KEY is not set."""
-        cache = PriceCache()
 
-        with patch.dict(os.environ, {}, clear=True):
-            source = create_market_data_source(cache)
+def test_no_key_gives_simulator():
+    assert isinstance(create_market_data_source(PriceCache()), SimulatorDataSource)
 
-        assert isinstance(source, SimulatorDataSource)
 
-    def test_creates_simulator_when_api_key_empty(self):
-        """Test that simulator is created when MASSIVE_API_KEY is empty."""
-        cache = PriceCache()
+@pytest.mark.parametrize("value", ["", "   ", "\n"])
+def test_blank_key_gives_simulator(monkeypatch, value):
+    monkeypatch.setenv("MASSIVE_API_KEY", value)
+    assert isinstance(create_market_data_source(PriceCache()), SimulatorDataSource)
 
-        with patch.dict(os.environ, {"MASSIVE_API_KEY": ""}, clear=True):
-            source = create_market_data_source(cache)
 
-        assert isinstance(source, SimulatorDataSource)
+def test_key_gives_massive_with_stripped_key(monkeypatch):
+    monkeypatch.setenv("MASSIVE_API_KEY", "  abc123 ")
+    cache = PriceCache()
+    src = create_market_data_source(cache)
+    assert isinstance(src, MassiveDataSource)
+    assert src._api_key == "abc123"
+    assert src._cache is cache
+    assert src._snapshot_interval == 15.0
 
-    def test_creates_simulator_when_api_key_whitespace(self):
-        """Test that simulator is created when MASSIVE_API_KEY is whitespace."""
-        cache = PriceCache()
 
-        with patch.dict(os.environ, {"MASSIVE_API_KEY": "   "}, clear=True):
-            source = create_market_data_source(cache)
+@pytest.mark.parametrize("raw,expected", [("5", 5.0), ("2.5", 2.5), ("0.1", 1.0), ("abc", 15.0)])
+def test_poll_interval_env(monkeypatch, raw, expected):
+    monkeypatch.setenv("MASSIVE_API_KEY", "k")
+    monkeypatch.setenv("MASSIVE_POLL_INTERVAL", raw)
+    assert create_market_data_source(PriceCache())._snapshot_interval == expected
 
-        assert isinstance(source, SimulatorDataSource)
 
-    def test_creates_massive_when_api_key_set(self):
-        """Test that Massive client is created when MASSIVE_API_KEY is set."""
-        cache = PriceCache()
+async def test_initial_prices_reach_simulator():
+    cache = PriceCache()
+    src = create_market_data_source(cache, initial_prices={"PYPL": 71.5})
+    await src.start(["PYPL"])
+    await src.stop()
+    assert cache.get_price("PYPL") == 71.5
 
-        with patch.dict(os.environ, {"MASSIVE_API_KEY": "test-key"}, clear=True):
-            source = create_market_data_source(cache)
 
-        assert isinstance(source, MassiveDataSource)
-
-    def test_massive_receives_api_key(self):
-        """Test that Massive client receives the API key."""
-        cache = PriceCache()
-
-        with patch.dict(os.environ, {"MASSIVE_API_KEY": "test-key-123"}, clear=True):
-            source = create_market_data_source(cache)
-
-        assert isinstance(source, MassiveDataSource)
-        assert source._api_key == "test-key-123"
-
-    def test_simulator_receives_cache(self):
-        """Test that simulator receives the cache reference."""
-        cache = PriceCache()
-
-        with patch.dict(os.environ, {}, clear=True):
-            source = create_market_data_source(cache)
-
-        assert isinstance(source, SimulatorDataSource)
-        assert source._cache is cache
-
-    def test_massive_receives_cache(self):
-        """Test that Massive client receives the cache reference."""
-        cache = PriceCache()
-
-        with patch.dict(os.environ, {"MASSIVE_API_KEY": "test-key"}, clear=True):
-            source = create_market_data_source(cache)
-
-        assert isinstance(source, MassiveDataSource)
-        assert source._cache is cache
+def test_source_is_unstarted():
+    src = create_market_data_source(PriceCache())
+    assert src.get_tickers() == []
