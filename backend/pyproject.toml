@@ -11,6 +11,9 @@ dependencies = [
     "massive>=2.0.0",
     "rich>=13.0.0",
     "tzdata>=2026.6",
+    "litellm>=1.109.1",
+    "pydantic>=2.12.5",
+    "python-dotenv",
 ]
 
 [project.optional-dependencies]

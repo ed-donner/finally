@@ -1,0 +1,40 @@
+# VCS / editor / agent files
+.git
+.github
+.claude
+.vscode
+.idea
+.DS_Store
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Frontend build artifacts
+**/node_modules
+frontend/.next
+frontend/out
+frontend/coverage
+
+# Python artifacts
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.coverage
+**/htmlcov
+backend/static
+
+# Runtime data
+db/*.db
+db/*.db-*
+
+# Tests / docs not needed in the image
+test
+test-results
+playwright-report
+planning
+scripts
