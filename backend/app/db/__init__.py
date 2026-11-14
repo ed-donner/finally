@@ -1,0 +1,53 @@
+"""FinAlly persistence layer (stdlib sqlite3). See planning/TEAM_CONTRACTS.md §3."""
+
+from .connection import (
+    DEFAULT_CASH,
+    DEFAULT_USER,
+    DEFAULT_WATCHLIST,
+    get_connection,
+    get_db_path,
+    init_db,
+    transaction,
+)
+from .repository import (
+    add_chat_message,
+    add_watchlist_ticker,
+    delete_position,
+    get_cash_balance,
+    get_chat_messages,
+    get_position,
+    get_positions,
+    get_snapshots,
+    get_trades,
+    get_watchlist,
+    record_snapshot,
+    record_trade,
+    remove_watchlist_ticker,
+    set_cash_balance,
+    upsert_position,
+)
+
+__all__ = [
+    "DEFAULT_CASH",
+    "DEFAULT_USER",
+    "DEFAULT_WATCHLIST",
+    "add_chat_message",
+    "add_watchlist_ticker",
+    "delete_position",
+    "get_cash_balance",
+    "get_chat_messages",
+    "get_connection",
+    "get_db_path",
+    "get_position",
+    "get_positions",
+    "get_snapshots",
+    "get_trades",
+    "get_watchlist",
+    "init_db",
+    "record_snapshot",
+    "record_trade",
+    "remove_watchlist_ticker",
+    "set_cash_balance",
+    "transaction",
+    "upsert_position",
+]

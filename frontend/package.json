@@ -1,0 +1,38 @@
+{
+  "name": "finally-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@fontsource/barlow-semi-condensed": "5.2.5",
+    "@fontsource/ibm-plex-mono": "5.2.5",
+    "lightweight-charts": "5.0.8",
+    "next": "15.5.28",
+    "react": "19.1.10",
+    "react-dom": "19.1.10"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "3.3.1",
+    "@tailwindcss/postcss": "4.1.18",
+    "@testing-library/jest-dom": "6.8.0",
+    "@testing-library/react": "16.3.0",
+    "@testing-library/user-event": "14.6.1",
+    "@types/node": "20.19.9",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.9",
+    "@vitejs/plugin-react": "4.7.0",
+    "eslint": "9.35.0",
+    "eslint-config-next": "15.5.28",
+    "jsdom": "26.1.0",
+    "tailwindcss": "4.1.18",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

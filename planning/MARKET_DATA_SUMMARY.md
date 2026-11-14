@@ -1,6 +1,10 @@
 # Market Data Backend — Summary
 
-**Status:** Complete, tested, reviewed, all issues resolved.
+**Status:** v2 complete (2026-11-11) — implements `MARKET_DATA_DESIGN.md`. 151 tests passing, 99% coverage of `app/market`, ruff clean.
+
+**v2 changes:** fixed Massive `last_trade.sip_timestamp` (ns) bug that prevented any real prices reaching the cache; added free-plan end-of-day mode (auto-detected, call-budgeted) alongside paid snapshot mode; `retries=0` + 429 back-off; `reference_price` / `day_change_percent` on every update; `set_tickers()` and ticker normalization; deterministic seeds and `initial_prices` for the simulator; SSE heartbeat, `id:` lines and a re-entrant router factory. Details in `MARKET_DATA_DESIGN.md` §13.
+
+The sections below describe the original v1 build.
 
 ## What Was Built
 
