@@ -1,0 +1,18 @@
+# Optional convenience wrapper: `docker compose up -d --build`
+services:
+  finally:
+    build: .
+    image: finally
+    container_name: finally
+    ports:
+      - "8000:8000"
+    volumes:
+      - finally-data:/app/db
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+
+volumes:
+  finally-data:
+    name: finally-data

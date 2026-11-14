@@ -1,0 +1,50 @@
+# E2E stack: the FinAlly app (mock LLM, throwaway DB) + a Playwright runner.
+#
+#   docker compose -f test/docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from playwright
+#   docker compose -f test/docker-compose.test.yml down -v
+#
+# The Playwright image tag MUST match the @playwright/test version in test/package.json.
+name: finally-e2e
+
+services:
+  finally:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: finally-e2e-app
+    environment:
+      LLM_MOCK: "true"
+      MASSIVE_API_KEY: ""
+      OPENROUTER_API_KEY: "not-needed-in-mock-mode"
+      FINALLY_DB_PATH: /app/db/finally.db
+    # Ephemeral DB: a fresh, seeded database on every run.
+    tmpfs:
+      - /app/db
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status == 200 else 1)"
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    depends_on:
+      finally:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://finally:8000
+      CI: "true"
+    working_dir: /work
+    ipc: host
+    volumes:
+      - ./:/work
+      # Keep the container's node_modules separate from the host's (different OS).
+      - /work/node_modules
+    command: ["sh", "-c", "npm ci --no-audit --no-fund && npx playwright test"]
