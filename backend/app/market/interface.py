@@ -5,12 +5,25 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 
+def normalize_ticker(ticker: str) -> str:
+    """Defence-in-depth normalization applied by every source.
+
+    The API layer validates tickers against ^[A-Z]{1,5}$. Sources only
+    strip/upper so internal callers (lifespan, tests, scripts) can't create
+    duplicate entries like 'aapl' and 'AAPL'.
+    """
+    return ticker.strip().upper()
+
+
 class MarketDataSource(ABC):
     """Contract for market data providers.
 
     Implementations push price updates into a shared PriceCache on their own
     schedule. Downstream code never calls the data source directly for prices —
     it reads from the cache.
+
+    Every implementation normalizes tickers with normalize_ticker() in
+    start(), add_ticker() and remove_ticker().
 
     Lifecycle:
         source = create_market_data_source(cache)

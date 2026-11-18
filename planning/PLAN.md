@@ -89,7 +89,7 @@ finally/
 ├── frontend/                 # Next.js TypeScript project (static export)
 ├── backend/                  # FastAPI uv project (Python)
 │   └── app/
-│       ├── market/           # Market data subsystem (complete; see Task 0 in §6)
+│       ├── market/           # Market data subsystem (complete, incl. Task 0 fixes)
 │       └── db/               # Schema definitions, seed data, DB initialization
 ├── planning/                 # Project-wide documentation for agents
 │   ├── PLAN.md               # This document
@@ -161,7 +161,7 @@ Both the simulator and the Massive client implement the same abstract interface 
 ### Ticker Normalization & Tracked Set
 
 - **The API layer is the authority for ticker validation.** Every request model normalizes tickers with `strip().upper()` and validates them against `^[A-Z]{1,5}$` (e.g. a Pydantic `BeforeValidator` on a shared `Ticker` type), so invalid tickers fail with `422`. Data sources only ever receive already-normalized tickers.
-- As defence in depth, both `SimulatorDataSource` and `MassiveDataSource` should also normalize with `strip().upper()` in `start()`, `add_ticker()`, and `remove_ticker()`. **This is not yet true of the code. See "Known Gaps (Task 0)" below.**
+- As defence in depth, both `SimulatorDataSource` and `MassiveDataSource` should also normalize with `strip().upper()` in `start()`, `add_ticker()`, and `remove_ticker()`.
 - `MarketDataSource` tracks the union of **watchlist ∪ positions**. A ticker is only removed from `MarketDataSource` (and `PriceCache`) when it is present in neither `watchlist` nor `positions`.
 
 ### Simulator (Default)
@@ -177,13 +177,13 @@ Both the simulator and the Massive client implement the same abstract interface 
 
 - REST API polling (not WebSocket) — simpler, works on all tiers
 - Polls for the union of all tracked tickers (`watchlist ∪ positions`) on a fixed 15-second default interval (`poll_interval=15.0`, compatible with the free tier limit of 5 calls/min)
-- Parses REST response into the same format as the simulator: price from `last_trade.price` (falling back to `day.close`, then `prev_day.close`), timestamp from `last_trade.sip_timestamp`, which is in **nanoseconds** (*Task 0: today the code reads a non-existent `last_trade.timestamp`; see T0.5*)
+- Parses REST response into the same format as the simulator: price from `last_trade.price` (falling back to `day.close`, then `prev_day.close`), timestamp from `last_trade.sip_timestamp`, which is in **nanoseconds**
 
 ### Shared Price Cache
 
 - A single background task (simulator or Massive poller) writes to an in-memory price cache (`PriceCache`)
 - The cache holds the latest price, previous price, and timestamp for each ticker
-- `PriceCache.remove()` must increment `_version` so SSE streams push an updated snapshot when a ticker is removed (*Task 0: not yet implemented*)
+- `PriceCache.remove()` must increment `_version` so SSE streams push an updated snapshot when a ticker is removed
 - SSE streams read from this cache and push updates to connected clients
 - This architecture supports future multi-user scenarios without changes to the data layer
 
@@ -194,12 +194,12 @@ Both the simulator and the Massive client implement the same abstract interface 
 - Sends an initial `retry: 1000\n\n` directive; client handles reconnection automatically
 - Whenever `price_cache.version` changes (checked every ~500ms), pushes a single batched JSON object keyed by ticker symbol containing all actively tracked tickers (`watchlist ∪ positions`)
 - Each ticker entry contains the 7 fields from `PriceUpdate.to_dict()`: `ticker`, `price`, `previous_price`, `timestamp`, `change`, `change_percent`, and `direction` (`"up"`, `"down"`, or `"flat"`), where `change` and `change_percent` are tick-to-tick relative to `previous_price`
-- When the cache becomes empty, the stream must emit `data: {}` so the client clears its last ticker (*Task 0: today `stream.py` skips emitting when there are no prices*)
-- `create_stream_router(price_cache)` in `backend/app/market/stream.py` must instantiate a fresh `APIRouter` inside the factory function, so multiple app instances in tests do not register duplicate routes (*Task 0: today it attaches to a module-level `router`*)
+- When the cache becomes empty, the stream must emit `data: {}` so the client clears its last ticker
+- `create_stream_router(price_cache)` in `backend/app/market/stream.py` must instantiate a fresh `APIRouter` inside the factory function, so multiple app instances in tests do not register duplicate routes
 
-### Known Gaps (Task 0)
+### Known Gaps (Task 0): resolved in M0
 
-The market data subsystem is complete and tested, but it does **not** yet implement the following behaviours that the rest of this plan relies on. Fixing them is the **backend agent's first task (milestone M0, §13)**. Until then, agents must not assume these behaviours exist.
+**Status: all five items below are fixed and covered by unit tests (milestone M0).** The table is kept as a record of what changed; the "Current code" column describes the code *before* M0.
 
 | # | Required behaviour | Current code | Fix |
 |---|---|---|---|

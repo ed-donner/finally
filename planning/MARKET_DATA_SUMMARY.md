@@ -1,6 +1,6 @@
 # Market Data Backend — Summary
 
-**Status:** Complete, tested, reviewed, all issues resolved.
+**Status:** Complete, tested, reviewed, all issues resolved. **Task 0 (T0.1–T0.5) complete** (milestone M0); see "Task 0 Fixes" below. The full design is in `planning/MARKET_DATA_DESIGN.md`.
 
 ## What Was Built
 
@@ -26,13 +26,13 @@ MarketDataSource (ABC)
 | File | Purpose |
 |------|---------|
 | `models.py` | `PriceUpdate` — immutable frozen dataclass (ticker, price, previous_price, timestamp, change, direction) |
-| `interface.py` | `MarketDataSource` — abstract base class defining `start/stop/add_ticker/remove_ticker/get_tickers` |
-| `cache.py` | `PriceCache` — thread-safe price store with version counter for SSE change detection |
+| `interface.py` | `MarketDataSource` — abstract base class defining `start/stop/add_ticker/remove_ticker/get_tickers`, plus `normalize_ticker()` |
+| `cache.py` | `PriceCache` — thread-safe price store with version counter for SSE change detection (bumped on update and on remove) |
 | `seed_prices.py` | Realistic seed prices, per-ticker GBM params (drift/volatility), correlation groups |
 | `simulator.py` | `GBMSimulator` (Geometric Brownian Motion with Cholesky-correlated moves) + `SimulatorDataSource` |
-| `massive_client.py` | `MassiveDataSource` — REST polling client for Polygon.io via the `massive` package |
+| `massive_client.py` | `MassiveDataSource` — REST polling client for Polygon.io via the `massive` package; `extract_price()` parses real `TickerSnapshot`s |
 | `factory.py` | `create_market_data_source()` — selects simulator or Massive based on `MASSIVE_API_KEY` env var |
-| `stream.py` | `create_stream_router()` — FastAPI SSE endpoint factory using version-based change detection |
+| `stream.py` | `create_stream_router()` — FastAPI SSE endpoint factory (fresh router per call) using version-based change detection; sends `data: {}` when empty, keep-alive comments when idle |
 
 ### Key Design Decisions
 
@@ -44,18 +44,26 @@ MarketDataSource (ABC)
 
 ## Test Suite
 
-**73 tests, all passing.** 6 test modules in `backend/tests/market/`.
+**104 tests, all passing.** 7 test modules in `backend/tests/market/`. Overall coverage: 97%.
 
-| Module | Tests | Coverage |
-|--------|-------|----------|
-| test_models.py | 11 | models.py: 100% |
-| test_cache.py | 13 | cache.py: 100% |
-| test_simulator.py | 17 | simulator.py: 98% |
-| test_simulator_source.py | 10 | (integration tests) |
-| test_factory.py | 7 | factory.py: 100% |
-| test_massive.py | 13 | massive_client.py: 56% (expected — API methods mocked) |
+| Module | Coverage |
+|--------|----------|
+| models.py, cache.py, interface.py, factory.py, seed_prices.py | 100% |
+| simulator.py | 97% |
+| massive_client.py | 95% (tests use real `massive` `TickerSnapshot` objects, not `MagicMock`) |
+| stream.py | 91% (new `test_stream.py`) |
 
-Overall coverage: 84%.
+## Task 0 Fixes (milestone M0)
+
+| # | Fix | Tests |
+|---|-----|-------|
+| T0.1 | Both sources normalize tickers (`normalize_ticker()`: `strip().upper()`) in `start()`, `add_ticker()`, `remove_ticker()`, and de-duplicate in `start()`. `add_ticker()` before `start()` is kept, not dropped | `test_simulator_source.py::TestSimulatorNormalization`, `test_massive.py::TestMassiveNormalizationAndRaces` |
+| T0.2 | `PriceCache.remove()` bumps `version` (only when the ticker was present); `version` is read under the lock | `test_cache.py::TestPriceCacheVersioning` |
+| T0.3 | SSE emits `data: {}` when the cache is empty | `test_stream.py::test_empty_cache_after_removal_emits_empty_object` |
+| T0.4 | `create_stream_router()` builds a fresh `APIRouter` per call | `test_stream.py::TestCreateStreamRouter` |
+| T0.5 | Massive parsing fixed: timestamp from `last_trade.sip_timestamp` (nanoseconds), not the non-existent `last_trade.timestamp`; price falls back to `day.close`, then `prev_day.close`. The worker thread gets a copy of the ticker list, and tickers removed during an in-flight poll are not written back | `test_massive.py::TestExtractPrice`, `test_removed_mid_poll_not_resurrected` |
+
+Also: the SSE generator sends `: keep-alive` comments after 15 s idle and re-raises `CancelledError`; `GBMSimulator` copies per-ticker params so the module constants can't be mutated.
 
 ## Code Review & Fixes Applied
 

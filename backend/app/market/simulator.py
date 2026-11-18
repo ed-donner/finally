@@ -10,7 +10,7 @@ import random
 import numpy as np
 
 from .cache import PriceCache
-from .interface import MarketDataSource
+from .interface import MarketDataSource, normalize_ticker
 from .seed_prices import (
     CORRELATION_GROUPS,
     CROSS_GROUP_CORR,
@@ -149,7 +149,7 @@ class GBMSimulator:
             return
         self._tickers.append(ticker)
         self._prices[ticker] = SEED_PRICES.get(ticker, random.uniform(50.0, 300.0))
-        self._params[ticker] = TICKER_PARAMS.get(ticker, dict(DEFAULT_PARAMS))
+        self._params[ticker] = dict(TICKER_PARAMS.get(ticker, DEFAULT_PARAMS))
 
     def _rebuild_cholesky(self) -> None:
         """Rebuild the Cholesky decomposition of the ticker correlation matrix.
@@ -215,19 +215,23 @@ class SimulatorDataSource(MarketDataSource):
         self._event_prob = event_probability
         self._sim: GBMSimulator | None = None
         self._task: asyncio.Task | None = None
+        self._pending: list[str] = []  # add_ticker() calls made before start()
 
     async def start(self, tickers: list[str]) -> None:
+        # Normalize and de-duplicate (preserving order), including early adds
+        normalized = list(dict.fromkeys(normalize_ticker(t) for t in [*tickers, *self._pending]))
+        self._pending.clear()
         self._sim = GBMSimulator(
-            tickers=tickers,
+            tickers=normalized,
             event_probability=self._event_prob,
         )
         # Seed the cache with initial prices so SSE has data immediately
-        for ticker in tickers:
+        for ticker in normalized:
             price = self._sim.get_price(ticker)
             if price is not None:
                 self._cache.update(ticker=ticker, price=price)
         self._task = asyncio.create_task(self._run_loop(), name="simulator-loop")
-        logger.info("Simulator started with %d tickers", len(tickers))
+        logger.info("Simulator started with %d tickers", len(normalized))
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -240,22 +244,31 @@ class SimulatorDataSource(MarketDataSource):
         logger.info("Simulator stopped")
 
     async def add_ticker(self, ticker: str) -> None:
-        if self._sim:
-            self._sim.add_ticker(ticker)
-            # Seed cache immediately so the ticker has a price right away
-            price = self._sim.get_price(ticker)
-            if price is not None:
-                self._cache.update(ticker=ticker, price=price)
-            logger.info("Simulator: added ticker %s", ticker)
+        ticker = normalize_ticker(ticker)
+        if self._sim is None:
+            if ticker not in self._pending:
+                self._pending.append(ticker)
+            return
+        if ticker in self._sim.get_tickers():
+            return
+        self._sim.add_ticker(ticker)
+        # Seed cache immediately so the ticker has a price right away
+        price = self._sim.get_price(ticker)
+        if price is not None:
+            self._cache.update(ticker=ticker, price=price)
+        logger.info("Simulator: added ticker %s", ticker)
 
     async def remove_ticker(self, ticker: str) -> None:
+        ticker = normalize_ticker(ticker)
+        if ticker in self._pending:
+            self._pending.remove(ticker)
         if self._sim:
             self._sim.remove_ticker(ticker)
         self._cache.remove(ticker)
         logger.info("Simulator: removed ticker %s", ticker)
 
     def get_tickers(self) -> list[str]:
-        return self._sim.get_tickers() if self._sim else []
+        return self._sim.get_tickers() if self._sim else list(self._pending)
 
     async def _run_loop(self) -> None:
         """Core loop: step the simulation, write to cache, sleep."""

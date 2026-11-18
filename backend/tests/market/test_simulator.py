@@ -129,3 +129,51 @@ class TestGBMSimulator:
         if '.' in price_str:
             decimal_part = price_str.split('.')[1]
             assert len(decimal_part) <= 2
+
+
+class TestGBMStatistics:
+    """Statistical checks on the GBM engine."""
+
+    def test_full_default_set_plus_unknowns_cholesky_ok(self):
+        sim = GBMSimulator(tickers=list(SEED_PRICES) + ["PYPL", "UBER", "COIN"])
+        assert sim._cholesky is not None
+        for _ in range(100):
+            assert all(p > 0 for p in sim.step().values())
+
+    def test_per_tick_volatility_matches_sigma(self):
+        import math
+
+        import numpy as np
+
+        np.random.seed(0)
+        sim = GBMSimulator(tickers=["MSFT"], event_probability=0.0)
+        log_returns = []
+        for _ in range(20_000):
+            before = sim._prices["MSFT"]
+            sim.step()
+            log_returns.append(math.log(sim._prices["MSFT"] / before))
+        expected = 0.20 * math.sqrt(GBMSimulator.DEFAULT_DT)
+        assert abs(np.std(log_returns) / expected - 1) < 0.05
+
+    def test_tech_pair_more_correlated_than_cross_sector(self):
+        import math
+
+        import numpy as np
+
+        np.random.seed(1)
+        sim = GBMSimulator(tickers=["AAPL", "MSFT", "JPM"], event_probability=0.0)
+        rets: dict[str, list[float]] = {t: [] for t in sim.get_tickers()}
+        for _ in range(5_000):
+            before = dict(sim._prices)
+            sim.step()
+            for t in rets:
+                rets[t].append(math.log(sim._prices[t] / before[t]))
+        c = np.corrcoef([rets["AAPL"], rets["MSFT"], rets["JPM"]])
+        assert c[0, 1] > c[0, 2] + 0.15  # ~0.6 vs ~0.3
+
+    def test_params_are_copied_not_shared(self):
+        from app.market.seed_prices import TICKER_PARAMS
+
+        sim = GBMSimulator(tickers=["AAPL"])
+        sim._params["AAPL"]["sigma"] = 9.9
+        assert TICKER_PARAMS["AAPL"]["sigma"] == 0.22

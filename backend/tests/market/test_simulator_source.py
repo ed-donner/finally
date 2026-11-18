@@ -136,3 +136,54 @@ class TestSimulatorDataSource:
         # Just verify it starts and stops cleanly
         await asyncio.sleep(0.2)
         await source.stop()
+
+
+@pytest.mark.asyncio
+class TestSimulatorNormalization:
+    """T0.1: the simulator source normalizes tickers in start/add/remove."""
+
+    async def test_start_normalizes_and_dedupes(self):
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=10.0)
+        await source.start([" aapl", "AAPL", "msft "])
+        try:
+            assert source.get_tickers() == ["AAPL", "MSFT"]
+            assert set(cache.get_all()) == {"AAPL", "MSFT"}
+        finally:
+            await source.stop()
+
+    async def test_add_and_remove_normalize(self):
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=10.0)
+        await source.start(["AAPL"])
+        try:
+            await source.add_ticker(" pypl ")
+            assert "PYPL" in source.get_tickers()
+            assert cache.get_price("PYPL") is not None
+            await source.remove_ticker("pypl")
+            assert "PYPL" not in source.get_tickers()
+            assert "PYPL" not in cache
+        finally:
+            await source.stop()
+
+    async def test_duplicate_add_is_noop(self):
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=10.0)
+        await source.start(["AAPL"])
+        try:
+            v = cache.version
+            await source.add_ticker("aapl")
+            assert source.get_tickers() == ["AAPL"]
+            assert cache.version == v
+        finally:
+            await source.stop()
+
+    async def test_add_before_start_is_kept(self):
+        source = SimulatorDataSource(price_cache=PriceCache(), update_interval=10.0)
+        await source.add_ticker("nvda")
+        assert source.get_tickers() == ["NVDA"]
+        await source.start(["AAPL"])
+        try:
+            assert source.get_tickers() == ["AAPL", "NVDA"]
+        finally:
+            await source.stop()

@@ -101,3 +101,42 @@ class TestPriceCache:
         cache = PriceCache()
         update = cache.update("AAPL", 190.12345)
         assert update.price == 190.12
+
+
+class TestPriceCacheVersioning:
+    """T0.2: removals must be visible to SSE change detection."""
+
+    def test_remove_bumps_version(self):
+        cache = PriceCache()
+        cache.update("AAPL", 190.0)
+        v = cache.version
+        cache.remove("AAPL")
+        assert cache.version == v + 1
+        assert "AAPL" not in cache
+
+    def test_remove_absent_ticker_does_not_bump_version(self):
+        cache = PriceCache()
+        cache.update("AAPL", 190.0)
+        v = cache.version
+        cache.remove("ZZZZ")
+        assert cache.version == v
+
+    def test_zero_timestamp_is_preserved(self):
+        assert PriceCache().update("AAPL", 1.0, timestamp=0.0).timestamp == 0.0
+
+    def test_concurrent_writers_are_consistent(self):
+        import threading
+
+        cache = PriceCache()
+
+        def writer(ticker: str) -> None:
+            for i in range(1000):
+                cache.update(ticker, 100.0 + i)
+
+        threads = [threading.Thread(target=writer, args=(f"T{i}",)) for i in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(cache) == 8
+        assert cache.version == 8000

@@ -12,7 +12,7 @@ uv sync --extra dev   # Install all dependencies including test/lint tools
 The market data subsystem lives in `app/market/`. Use these imports:
 
 ```python
-from app.market import PriceCache, PriceUpdate, MarketDataSource, create_market_data_source
+from app.market import PriceCache, PriceUpdate, MarketDataSource, create_market_data_source, normalize_ticker
 ```
 
 ### Core Types
@@ -25,9 +25,9 @@ from app.market import PriceCache, PriceUpdate, MarketDataSource, create_market_
   - `get_price(ticker) -> float | None`
   - `get_all() -> dict[str, PriceUpdate]`
   - `remove(ticker)`
-  - `version` property — monotonic counter, increments on every update (for SSE change detection)
+  - `version` property — monotonic counter, increments on every update and on `remove()` of a present ticker (for SSE change detection)
 
-- **`MarketDataSource`** — Abstract interface implemented by `SimulatorDataSource` and `MassiveDataSource`. Lifecycle: `start(tickers)` -> `add_ticker()` / `remove_ticker()` -> `stop()`.
+- **`MarketDataSource`** — Abstract interface implemented by `SimulatorDataSource` and `MassiveDataSource`. Lifecycle: `start(tickers)` -> `add_ticker()` / `remove_ticker()` -> `stop()`. Sources normalize tickers with `normalize_ticker()` (`strip().upper()`); the API layer is still responsible for validating `^[A-Z]{1,5}$`. `remove_ticker()` also removes the ticker from the cache. Track `watchlist ∪ positions`: only remove a ticker from the source when it is in neither.
 
 - **`create_market_data_source(cache)`** — Factory. Returns `MassiveDataSource` if `MASSIVE_API_KEY` is set, otherwise `SimulatorDataSource`.
 
@@ -38,6 +38,8 @@ from app.market import create_stream_router
 
 router = create_stream_router(price_cache)  # Returns FastAPI APIRouter
 # Endpoint: GET /api/stream/prices (text/event-stream)
+# Fresh router per call. Sends the full {ticker: PriceUpdate.to_dict()} map whenever
+# the cache version changes; `data: {}` when the cache is empty.
 ```
 
 ### Seed Data
