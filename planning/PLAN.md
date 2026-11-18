@@ -177,7 +177,7 @@ Both the simulator and the Massive client implement the same abstract interface 
 
 - REST API polling (not WebSocket) — simpler, works on all tiers
 - Polls for the union of all tracked tickers (`watchlist ∪ positions`) on a fixed 15-second default interval (`poll_interval=15.0`, compatible with the free tier limit of 5 calls/min)
-- Parses REST response into the same format as the simulator
+- Parses REST response into the same format as the simulator: price from `last_trade.price` (falling back to `day.close`, then `prev_day.close`), timestamp from `last_trade.sip_timestamp`, which is in **nanoseconds** (*Task 0: today the code reads a non-existent `last_trade.timestamp`; see T0.5*)
 
 ### Shared Price Cache
 
@@ -207,8 +207,9 @@ The market data subsystem is complete and tested, but it does **not** yet implem
 | T0.2 | `PriceCache.remove()` bumps `version` | `cache.py:59-62` only pops the entry | Increment `_version` inside the lock |
 | T0.3 | Empty cache emits `data: {}` | `stream.py` guards the yield with `if prices:` | Emit the (possibly empty) JSON object whenever the version changes |
 | T0.4 | Fresh router per factory call | `stream.py:17` module-level `router` | Create the `APIRouter` inside `create_stream_router()` |
+| T0.5 | Massive snapshots are parsed correctly | `massive_client.py:103` reads `snap.last_trade.timestamp / 1000.0`, but the real `massive` `LastTrade` model has no `timestamp` field (it is `sip_timestamp`, in nanoseconds). The `AttributeError` is swallowed for each snapshot, so in Massive mode the cache likely stays empty. Tests pass only because they use `MagicMock` snapshots | Read `last_trade.sip_timestamp / 1e9`; fall back to `day.close` / `prev_day.close` when there is no usable last trade; build test snapshots with `TickerSnapshot.from_dict(...)` |
 
-Each fix needs a unit test in `backend/tests/market/`. Update `planning/MARKET_DATA_SUMMARY.md` when they are done.
+Each fix needs a unit test in `backend/tests/market/`. Update `planning/MARKET_DATA_SUMMARY.md` when they are done. Target code and tests for every fix are in `planning/MARKET_DATA_DESIGN.md` (§17 checklist).
 
 ---
 
@@ -623,7 +624,7 @@ Agents build FinAlly in the milestones below, in order. A milestone is **done** 
 
 | Milestone | Owner | Scope | Acceptance check |
 |---|---|---|---|
-| **M0: Market-data fixes** | Backend | Task 0 items T0.1–T0.4 (§6) | `uv run --extra dev pytest` green, including new tests for each fix; `MARKET_DATA_SUMMARY.md` updated |
+| **M0: Market-data fixes** | Backend | Task 0 items T0.1–T0.5 (§6) | `uv run --extra dev pytest` green, including new tests for each fix; `MARKET_DATA_SUMMARY.md` updated |
 | **M1: DB and REST API** | Backend | `backend/app/db/` (schema, seed, lifespan init), portfolio/watchlist/health routes, snapshot task, `APP_PASSWORD` middleware | pytest green; `curl` responses for every §8 endpoint match `/openapi.json` and the §8 examples |
 | **M2: LLM chat** | Backend | Mock mode first, then real `acompletion` integration, fallback handling, rate limit | Mock-mode tests green; one real call succeeds with `OPENROUTER_API_KEY`; SSE keeps streaming during a chat request |
 | **M3: Frontend** | Frontend | All §10 components; types generated from `/openapi.json` | `npm run build` produces a static export; frontend unit tests green; works end-to-end against the running backend |
