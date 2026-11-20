@@ -206,4 +206,3 @@ All three raise `UnknownTicker` (PLAN.md §6, §8). Confirm which one the full-m
 - Third-party, for conflicting claims only: [apicostcalc.com rebrand and pricing](https://apicostcalc.com/blog/polygon-massive-rebrand-api-pricing.html), [CostBench Polygon.io plans](https://costbench.com/software/financial-data-terminals/polygon-io/)
 
 **Related:** [PLAN.md](PLAN.md) §5, §6, §13.5 · [API.md](API.md) · [DATA_INTERFACE_DESIGN.md](DATA_INTERFACE_DESIGN.md) · [SIMULATOR_RESEARCH.md](SIMULATOR_RESEARCH.md)
-

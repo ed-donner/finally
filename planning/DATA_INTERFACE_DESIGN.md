@@ -292,4 +292,3 @@ Trades and watchlist changes do not talk to the price source. They go through RE
 ---
 
 **Related:** [PLAN.md](PLAN.md) §6, §10 · [API.md](API.md) · [MASSIVE_API_RESEARCH.md](MASSIVE_API_RESEARCH.md) · [SIMULATOR_RESEARCH.md](SIMULATOR_RESEARCH.md)
-

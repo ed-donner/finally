@@ -37,4 +37,3 @@ An agent does not hand work to another agent or declare a task complete until:
 
 - Commit messages are imperative and describe the change in the first line, under 72 characters.
 - Spec-only changes (anything under `planning/`) get their own commit, separate from code.
-

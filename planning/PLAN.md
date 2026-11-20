@@ -788,4 +788,3 @@ Source: `planning/REVIEW.md`, written by the `reviewer` agent. Medium and low fi
 | H7 | Moot under integer quantities. Exact comparison, plus a 0.1 + 0.2 sell test. | §8, §12 |
 | H8 | `price_state` table persists last price and `prev_close`. Restart rules define simulator resume, Massive `stale` values, and snapshot skipping. `current_price` and derived fields are nullable with `stale` flag. | §6, §7, API.md |
 | H9 | Base image moved to `node:22-slim` (pinned minor). | §11 |
-
