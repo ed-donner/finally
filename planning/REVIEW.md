@@ -203,3 +203,4 @@ Each item gives its location, the problem, and a concrete suggestion.
 4. Resolve the M1 contradiction table in one spec-only commit.
 5. Apply the H4 and H5 Docker and script fixes along with M9 and M10.
 6. Decide the money and quantity representation (H6, H7) before the portfolio module is written.
+

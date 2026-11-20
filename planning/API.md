@@ -365,3 +365,4 @@ Watchlist changes execute first, then trades, each in array order. A rejected it
 ## Static Files
 
 Any `GET` that does not begin with `/api/` serves the static export from `/app/static`. Unknown paths return `index.html` so that client-side routing works. Missing assets under `/_next/` return `404`.
+

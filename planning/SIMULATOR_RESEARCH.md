@@ -247,3 +247,4 @@ Points to keep in the real implementation:
 - Standard GBM and Itô references, used for the exact solution in §2.1. No external source was needed for the arithmetic in §2.2–§2.4, which is shown inline so it can be rechecked.
 
 **Related:** [PLAN.md](PLAN.md) §6, §7, §12, §13.6 H1, H2 · [DATA_INTERFACE_DESIGN.md](DATA_INTERFACE_DESIGN.md) · [MASSIVE_API_RESEARCH.md](MASSIVE_API_RESEARCH.md)
+
